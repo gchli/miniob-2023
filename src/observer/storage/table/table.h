@@ -63,6 +63,9 @@ public:
    */
   RC open(const char *meta_file, const char *base_dir);
 
+  // 制作一个新的Record，使用对应的Attr与Value替换，用来update
+  RC make_update_record(Record &new_record, Record &old_record, const std::string &attribute, const Value &value);
+
   /**
    * @brief 根据给定的字段生成一个记录/行
    * @details 通常是由用户传过来的字段，按照schema信息组装成一个record。

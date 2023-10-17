@@ -17,6 +17,9 @@ See the Mulan PSL v2 for more details. */
 #include <algorithm>
 
 #include "common/defs.h"
+#include "sql/parser/value.h"
+#include "storage/field/field_meta.h"
+#include "storage/record/record.h"
 #include "storage/table/table.h"
 #include "storage/table/table_meta.h"
 #include "common/log/log.h"
@@ -302,6 +305,32 @@ const char *Table::name() const
 const TableMeta &Table::table_meta() const
 {
   return table_meta_;
+}
+
+RC Table::make_update_record(Record &new_record, Record &old_record, const std::string &attribute, const Value &value) {
+  int record_size = table_meta_.record_size();
+  char *record_data = (char *)malloc(record_size);
+  memcpy(record_data, old_record.data(), record_size);
+
+  for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
+    const FieldMeta *field = table_meta_.field(i);
+    if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
+      size_t copy_len = field->len();
+      if (field->type() == CHARS) {
+        const size_t data_len = value.length();
+        if (copy_len > data_len) {
+          copy_len = data_len + 1;
+        }
+      }
+      
+      memcpy(record_data + field->offset(), value.data(), copy_len);
+      new_record.set_data_owner(record_data, record_size);
+
+      return RC::SUCCESS;
+    }
+  }
+
+  return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
 RC Table::make_record(int value_num, const Value *values, Record &record)
