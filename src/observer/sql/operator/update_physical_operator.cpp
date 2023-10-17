@@ -2,6 +2,7 @@
 
 #include "common/log/log.h"
 #include "sql/operator/delete_physical_operator.h"
+#include "storage/field/field_meta.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
@@ -22,6 +23,12 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   trx_ = trx;
 
+  const FieldMeta *field_meta;
+  rc = table_->get_field_meta_by_name(field_meta, attribute_name_);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open child operator: %s", strrc(rc));
+    return rc;
+  }
   return RC::SUCCESS;
 }
 

@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
+#include <bits/types/FILE.h>
 #include <limits.h>
 #include <string.h>
 #include <algorithm>
@@ -307,6 +308,18 @@ const TableMeta &Table::table_meta() const
   return table_meta_;
 }
 
+RC Table::get_field_meta_by_name(FieldMeta const *&field_meta, const std::string &attribute) {
+  for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
+    const FieldMeta *field = table_meta_.field(i);
+    if (strcmp(field->name(), attribute.c_str()) == 0) {
+      field_meta = field;
+      return RC::SUCCESS;
+    }
+  }
+
+  return RC::SCHEMA_FIELD_NOT_EXIST;
+}
+
 RC Table::make_update_record(Record &new_record, Record &old_record, const std::string &attribute, const Value &value) {
   int record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
@@ -314,7 +327,7 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
 
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *field = table_meta_.field(i);
-    if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
+    if (field->type() == value.attr_type() && field->len() == value.length() && strcmp(field->name(), attribute.c_str()) == 0) {
       size_t copy_len = field->len();
       if (field->type() == CHARS) {
         const size_t data_len = value.length();
