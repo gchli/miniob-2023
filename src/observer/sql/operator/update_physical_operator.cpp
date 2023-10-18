@@ -4,7 +4,7 @@
 #include "sql/operator/delete_physical_operator.h"
 #include "storage/field/field_meta.h"
 #include "storage/record/record.h"
-#include "storage/table/table.h"
+
 #include "storage/trx/trx.h"
 #include "sql/stmt/delete_stmt.h"
 

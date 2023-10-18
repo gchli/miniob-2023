@@ -12,9 +12,11 @@ See the Mulan PSL v2 for more details. */
 // Created by Wangyunlai on 2022/5/22.
 //
 
+#include "common/date.h"
 #include "common/rc.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
+#include "sql/parser/value.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
@@ -31,12 +33,12 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
     const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt)
 {
   RC rc = RC::SUCCESS;
-  stmt = nullptr;
+  stmt  = nullptr;
 
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
+    rc                      = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -77,6 +79,47 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   return RC::SUCCESS;
 }
 
+bool FilterStmt::check_comparable(FilterUnit &filter_unit)
+{
+  bool is_left_attr  = filter_unit.left().is_attr;
+  bool is_right_attr = filter_unit.right().is_attr;
+
+  auto get_filer_obj_type = [](const FilterObj &obj, bool is_attr) {
+    return is_attr ? obj.field.attr_type() : obj.value.attr_type();
+  };
+  AttrType left_type  = get_filer_obj_type(filter_unit.left(), is_left_attr);
+  AttrType right_type = get_filer_obj_type(filter_unit.right(), is_right_attr);
+
+  // 均为attr类型，可能同时为DATES类型
+  if (left_type == DATES && right_type == DATES) {
+    return true;
+  }
+  if (left_type == CHARS && right_type == DATES) {
+    date_u date;
+    auto   ret = str_to_date(filter_unit.left().value.get_string(), date);
+    if (ret != RC::SUCCESS) {
+      return false;
+    }
+    FilterObj new_left_obj;
+    Value     new_value(date);
+    new_left_obj.init_value(new_value);
+    filter_unit.set_left(new_left_obj);
+  }
+  if (left_type == DATES && right_type == CHARS) {
+    date_u date;
+    auto   ret = str_to_date(filter_unit.right().value.get_string(), date);
+    if (ret != RC::SUCCESS) {
+      return false;
+    }
+    FilterObj new_right_obj;
+    Value     new_value(date);
+    new_right_obj.init_value(new_value);
+    filter_unit.set_right(new_right_obj);
+  }
+  // todo(ligch): 可能有其他类型也无法比较，目前只针对date进行判断。
+  return true;
+}
+
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
     const ConditionSqlNode &condition, FilterUnit *&filter_unit)
 {
@@ -89,11 +132,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   }
 
   filter_unit = new FilterUnit;
-
   if (condition.left_is_attr) {
-    Table *table = nullptr;
+    Table           *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
+    rc                     = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
@@ -103,14 +145,17 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     filter_unit->set_left(filter_obj);
   } else {
     FilterObj filter_obj;
+    if (condition.left_value.attr_type() == DATES && !is_date_valid(condition.left_value.get_string())) {
+      return RC::INVALID_ARGUMENT;
+    }
     filter_obj.init_value(condition.left_value);
     filter_unit->set_left(filter_obj);
   }
 
   if (condition.right_is_attr) {
-    Table *table = nullptr;
+    Table           *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
+    rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
@@ -127,5 +172,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_comp(comp);
 
   // 检查两个类型是否能够比较
+  if (!check_comparable(*filter_unit)) {
+    LOG_ERROR("cant't compare left type with right type.");
+    return RC::INVALID_ARGUMENT;
+  }
   return rc;
 }
