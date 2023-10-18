@@ -14,7 +14,9 @@ See the Mulan PSL v2 for more details. */
 
 #include <stddef.h>
 #include <math.h>
+#include "common/lang/comparator.h"
 #include "condition_filter.h"
+#include "sql/parser/parse_defs.h"
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "storage/table/table.h"
@@ -136,6 +138,12 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     right_value.set_data(rec.data() + right_.attr_offset, right_.attr_length);
   } else {
     right_value.set_value(right_.value);
+  }
+
+  if (comp_op_ == STR_LIKE) {
+    if (left_value.attr_type() == CHARS && left_value.attr_type() == right_value.attr_type()) {
+      return common::compare_string_like(left_value.get_string(), right_value.get_string());
+    }
   }
 
   int cmp_result = left_value.compare(right_value);
