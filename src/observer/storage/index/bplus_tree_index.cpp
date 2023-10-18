@@ -20,7 +20,7 @@ BplusTreeIndex::~BplusTreeIndex() noexcept
   close();
 }
 
-RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_meta)
+RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_metas)
 {
   if (inited_) {
     LOG_WARN("Failed to create index due to the index has been created before. file_name:%s, index:%s, field:%s",
@@ -30,13 +30,13 @@ RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, co
     return RC::RECORD_OPENNED;
   }
 
-  for (const auto field_meta : field_meta) {
-    field_metas_.emplace_back(*field_meta);
-  }
+  // for (const auto field_meta : field_meta) {
+    // field_meta_.emplace_back(*field_meta);
+  // }
   
-  Index::init(index_meta, field_metas_);
+  Index::init(index_meta, *field_metas[0]);
 
-  RC rc = index_handler_.create(file_name, field_metas_[0].type(), field_metas_[0].len());
+  RC rc = index_handler_.create(file_name, field_meta_.type(), field_meta_.len());
   if (RC::SUCCESS != rc) {
     LOG_WARN("Failed to create index_handler, file_name:%s, index:%s, field:%s, rc:%s",
         file_name,
@@ -62,7 +62,7 @@ RC BplusTreeIndex::open(const char *file_name, const IndexMeta &index_meta, cons
     return RC::RECORD_OPENNED;
   }
 
-  Index::init(index_meta, field_metas_);
+  Index::init(index_meta, field_meta_);
 
   RC rc = index_handler_.open(file_name);
   if (RC::SUCCESS != rc) {
@@ -93,12 +93,12 @@ RC BplusTreeIndex::close()
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 {
-  return index_handler_.insert_entry(record + field_metas_[0].offset(), rid);
+  return index_handler_.insert_entry(record + field_meta_.offset(), rid);
 }
 
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  return index_handler_.delete_entry(record + field_metas_[0].offset(), rid);
+  return index_handler_.delete_entry(record + field_meta_.offset(), rid);
 }
 
 IndexScanner *BplusTreeIndex::create_scanner(
