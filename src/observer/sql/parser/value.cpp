@@ -215,6 +215,10 @@ int Value::compare(const Value &other) const
   return -1;  // TODO return rc?
 }
 
+bool Value::compare_like(const Value &other) const {
+  return common::compare_string_like(str_value_, other.str_value_);
+}
+
 int Value::get_int() const
 {
   switch (attr_type_) {

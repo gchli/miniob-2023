@@ -142,7 +142,7 @@ bool DefaultConditionFilter::filter(const Record &rec) const
 
   if (comp_op_ == STR_LIKE) {
     if (left_value.attr_type() == CHARS && left_value.attr_type() == right_value.attr_type()) {
-      return common::compare_string_like(left_value.get_string(), right_value.get_string());
+      return left_value.compare_like(right_value);
     }
   }
 

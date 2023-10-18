@@ -94,7 +94,7 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
   RC rc = RC::SUCCESS;
   if (comp_ == STR_LIKE) {
   if (left.attr_type() == CHARS && left.attr_type() == right.attr_type() && comp_ == STR_LIKE) {
-    result = common::compare_string_like(left.get_string(), right.get_string());
+    result = left.compare_like(right);
     return rc;
   }
     LOG_ERROR("type is not char for like compare");
