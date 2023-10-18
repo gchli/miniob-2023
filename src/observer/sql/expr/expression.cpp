@@ -92,9 +92,19 @@ ComparisonExpr::~ComparisonExpr()
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC rc = RC::SUCCESS;
-  if (comp_ == STR_LIKE) {
-  if (left.attr_type() == CHARS && left.attr_type() == right.attr_type() && comp_ == STR_LIKE) {
-    result = left.compare_like(right);
+  if (comp_ == STR_LIKE || comp_ == STR_NOT_LIKE) {
+  if (left.attr_type() == CHARS && left.attr_type() == right.attr_type()) {
+    bool cmp_result = left.compare_like(right);
+    switch (comp_) {
+    case STR_LIKE:
+      result = cmp_result;
+      break;
+    case STR_NOT_LIKE:
+      result = !cmp_result;
+      break;
+    default:
+      return RC::INTERNAL;
+    }
     return rc;
   }
     LOG_ERROR("type is not char for like compare");

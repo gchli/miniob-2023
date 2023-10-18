@@ -140,12 +140,6 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     right_value.set_value(right_.value);
   }
 
-  if (comp_op_ == STR_LIKE) {
-    if (left_value.attr_type() == CHARS && left_value.attr_type() == right_value.attr_type()) {
-      return left_value.compare_like(right_value);
-    }
-  }
-
   int cmp_result = left_value.compare(right_value);
 
   switch (comp_op_) {
