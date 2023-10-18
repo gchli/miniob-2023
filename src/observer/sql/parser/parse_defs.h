@@ -184,7 +184,8 @@ struct CreateIndexSqlNode
 {
   std::string index_name;      ///< Index name
   std::string relation_name;   ///< Relation name
-  std::string attribute_name;  ///< Attribute name
+  // std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attributes; ///< Attribute names
 };
 
 /**

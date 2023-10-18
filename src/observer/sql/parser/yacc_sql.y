@@ -116,6 +116,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
+  std::vector<std::string> *        attribute_list;
   char *                            string;
   int                               number;
   float                             floats;
@@ -145,6 +146,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       attr_list
 %type <expression>          expression
 %type <expression_list>     expression_list
+%type <attribute_list>      id_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -261,18 +263,57 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    /* CREATE INDEX ID ON ID LBRACE ID RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $3;
+      printf("%s\n", $3);
+      create_index.relation_name = $5;
+      create_index.attributes.emplace_back($7);
+      free($3);
+      free($5);
+      free($7);
+    }
+    | */
+    CREATE INDEX ID ON ID LBRACE ID id_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+      
+      if ($8 != nullptr) {
+        create_index.attributes = *$8;
+      } else {
+        create_index.attributes = std::vector<std::string>();
+      }
+      std::string first = $7;
+      create_index.attributes.insert(create_index.attributes.begin(), first);
+      
       free($3);
       free($5);
       free($7);
+      free($8);
     }
     ;
+
+id_list:
+  {
+    $$ = nullptr;
+  }
+  | COMMA ID id_list
+  {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<std::string>;
+    }
+
+    $$->emplace_back($2);
+    free($2);
+  }
+  ;
 
 drop_index_stmt:      /*drop index 语句的语法解析树*/
     DROP INDEX ID ON ID
