@@ -323,7 +323,7 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
 
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *field = table_meta_.field(i);
-    // todo(ligch): 带有日期的情况需要特殊判断，并且需要判断日期的合法性
+    // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
     if (field->type() != value.attr_type()) {
       if (field->type() == DATES && (strcmp(field->name(), attribute.c_str()) == 0) && value.attr_type() == CHARS) {
         date_u date;
