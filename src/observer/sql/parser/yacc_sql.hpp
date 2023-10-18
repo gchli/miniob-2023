@@ -93,11 +93,12 @@ extern int yydebug;
     LE = 299,
     GE = 300,
     NE = 301,
-    NUMBER = 302,
-    FLOAT = 303,
-    ID = 304,
-    SSS = 305,
-    UMINUS = 306
+    LIKE = 302,
+    NUMBER = 303,
+    FLOAT = 304,
+    ID = 305,
+    SSS = 306,
+    UMINUS = 307
   };
 #endif
 
@@ -105,7 +106,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 103 "yacc_sql.y"
+#line 104 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -124,7 +125,7 @@ union YYSTYPE
   int                               number;
   float                             floats;
 
-#line 128 "yacc_sql.hpp"
+#line 129 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -13,7 +13,10 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/lang/comparator.h"
+#include "common/log/log.h"
 #include "sql/expr/tuple.h"
+#include "sql/parser/parse_defs.h"
 
 using namespace std;
 
@@ -89,6 +92,15 @@ ComparisonExpr::~ComparisonExpr()
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC rc = RC::SUCCESS;
+  if (comp_ == STR_LIKE) {
+  if (left.attr_type() == CHARS && left.attr_type() == right.attr_type() && comp_ == STR_LIKE) {
+    result = common::compare_string_like(left.get_string(), right.get_string());
+    return rc;
+  }
+    LOG_ERROR("type is not char for like compare");
+    return RC::INTERNAL;
+  }
+
   int cmp_result = left.compare(right);
   result = false;
   switch (comp_) {
