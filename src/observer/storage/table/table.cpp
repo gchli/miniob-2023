@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include <algorithm>
 
+#include "common/date.h"
 #include "common/defs.h"
 #include "sql/parser/value.h"
 #include "storage/field/field_meta.h"
@@ -322,8 +323,25 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
 
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *field = table_meta_.field(i);
-    if (field->type() == value.attr_type() && field->len() == value.length() &&
-        strcmp(field->name(), attribute.c_str()) == 0) {
+    // todo(ligch): 带有日期的情况需要特殊判断，并且需要判断日期的合法性
+    if (field->type() != value.attr_type()) {
+      if (field->type() == DATES && (strcmp(field->name(), attribute.c_str()) == 0) && value.attr_type() == CHARS) {
+        date_u date;
+
+        if (RC::SUCCESS != str_to_date(value.get_string(), date)) {
+          return RC::INVALID_ARGUMENT;
+        }
+        Value new_date_value(date);
+        memcpy(record_data + field->offset(), new_date_value.data(), field->len());
+        new_record.set_data_owner(record_data, record_size);
+        return RC::SUCCESS;
+      }
+    }
+
+    if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
+
+      // if (field->type() == value.attr_type() && field->len() == value.length() &&
+      //     strcmp(field->name(), attribute.c_str()) == 0) {
       size_t copy_len = field->len();
       if (field->type() == CHARS) {
         const size_t data_len = value.length();
