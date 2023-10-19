@@ -181,6 +181,8 @@ public:
    */
   RC delete_record(const RID *rid);
 
+  RC update_record(const Record &record);
+
   /**
    * @brief 获取指定位置的记录数据
    *
@@ -274,6 +276,9 @@ public:
    * @param rid         返回该记录的标识符
    */
   RC insert_record(const char *data, int record_size, RID *rid);
+
+  // 更新一条数据
+  RC update_record(const Record &record);
 
    /**
    * @brief 数据库恢复时，在指定文件指定位置插入数据

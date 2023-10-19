@@ -34,6 +34,27 @@ RC DeletePhysicalOperator::open(Trx *trx)
 
   trx_ = trx;
 
+  if (children_.empty()) {
+    return RC::RECORD_EOF;
+  }
+
+  while (RC::SUCCESS == (rc = child->next())) {
+    Tuple *tuple = child->current_tuple();
+    if (nullptr == tuple) {
+      LOG_WARN("failed to get current record: %s", strrc(rc));
+      return rc;
+    }
+
+    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+    Record &record = row_tuple->record();
+    records.emplace_back(record);
+    // rc = trx_->delete_record(table_, record);
+    // if (rc != RC::SUCCESS) {
+    //   LOG_WARN("failed to delete record: %s", strrc(rc));
+    //   return rc;
+    // }
+  }
+
   return RC::SUCCESS;
 }
 
@@ -44,21 +65,23 @@ RC DeletePhysicalOperator::next()
     return RC::RECORD_EOF;
   }
 
-  PhysicalOperator *child = children_[0].get();
-  while (RC::SUCCESS == (rc = child->next())) {
-    Tuple *tuple = child->current_tuple();
-    if (nullptr == tuple) {
-      LOG_WARN("failed to get current record: %s", strrc(rc));
-      return rc;
-    }
+  // PhysicalOperator *child = children_[0].get();
+  // while (RC::SUCCESS == (rc = child->next())) {
+  //   Tuple *tuple = child->current_tuple();
+  //   if (nullptr == tuple) {
+  //     LOG_WARN("failed to get current record: %s", strrc(rc));
+  //     return rc;
+  //   }
 
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record &record = row_tuple->record();
-    rc = trx_->delete_record(table_, record);
+  //   RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+  //   Record &record = row_tuple->record();
+  while (!records.empty()) {
+    rc = trx_->delete_record(table_, records.back());
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
       return rc;
     }
+    records.pop_back();
   }
 
   return RC::RECORD_EOF;

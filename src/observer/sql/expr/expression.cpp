@@ -14,9 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "common/rc.h"
+#include "common/lang/comparator.h"
+#include "common/log/log.h"
 #include "sql/expr/tuple.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
+#include "sql/parser/parse_defs.h"
 
 using namespace std;
 

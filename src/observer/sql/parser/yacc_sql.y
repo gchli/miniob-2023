@@ -103,6 +103,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         AVG
         SUM
         COUNT
+        LIKE
+        NOT
+        UNIQUE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -121,6 +124,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
+  std::vector<std::string> *        attribute_list;
+  std::vector<UpdateListSqlNode> *  update_list;
   char *                            string;
   int                               number;
   float                             floats;
@@ -152,6 +157,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       attr_list
 %type <expression>          expression
 %type <expression_list>     expression_list
+%type <attribute_list>      id_list
+%type <update_list>         update_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -268,18 +275,66 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE INDEX ID ON ID LBRACE ID id_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+
+      if ($8 != nullptr) {
+        create_index.attributes = *$8;
+      } else {
+        create_index.attributes = std::vector<std::string>();
+      }
+      std::string first = $7;
+      create_index.attributes.insert(create_index.attributes.begin(), first);
+      create_index.unique = false;
+
       free($3);
       free($5);
       free($7);
+      free($8);
+    }
+    | CREATE UNIQUE INDEX ID ON ID LBRACE ID id_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+
+      if ($9 != nullptr) {
+        create_index.attributes = *$9;
+      } else {
+        create_index.attributes = std::vector<std::string>();
+      }
+      std::string first = $8;
+      create_index.attributes.insert(create_index.attributes.begin(), first);
+      create_index.unique = true;
+
+      free($4);
+      free($6);
+      free($8);
+      free($9);
     }
     ;
+
+id_list:
+  {
+    $$ = nullptr;
+  }
+  | COMMA ID id_list
+  {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<std::string>;
+    }
+
+    $$->emplace_back($2);
+    free($2);
+  }
+  ;
 
 drop_index_stmt:      /*drop index 语句的语法解析树*/
     DROP INDEX ID ON ID
@@ -446,20 +501,40 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where
+    UPDATE ID SET ID EQ value update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
+      $$->update.update_list.emplace_back(UpdateListSqlNode{$4, *$6});
       if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+        $$->update.update_list.insert($$->update.update_list.end(), $7->begin(), $7->end());
+      }
+      if ($8 != nullptr) {
+        $$->update.conditions.swap(*$8);
+        delete $8;
       }
       free($2);
       free($4);
+      free($7);
     }
     ;
+
+update_list:
+    {
+      $$ = nullptr;
+    }
+    | COMMA ID EQ value update_list
+    {
+      if ($5 == nullptr) {
+        $$ = new std::vector<UpdateListSqlNode>;
+      } else {
+        $$ = $5;
+      }
+      $$->emplace_back(UpdateListSqlNode{$2, *$4});
+      free($4);
+    }
+    ;
+
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT select_attr FROM ID rel_list where
     {
@@ -708,6 +783,8 @@ comp_op:
     | LE { $$ = LESS_EQUAL; }
     | GE { $$ = GREAT_EQUAL; }
     | NE { $$ = NOT_EQUAL; }
+    | LIKE { $$ = STR_LIKE; }
+    | NOT LIKE { $$ = STR_NOT_LIKE; }
     ;
 
 load_data_stmt:

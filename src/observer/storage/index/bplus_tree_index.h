@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/index.h"
 #include "storage/index/bplus_tree.h"
+#include "storage/record/record_manager.h"
 
 /**
  * @brief B+树索引
@@ -24,11 +25,12 @@ See the Mulan PSL v2 for more details. */
 class BplusTreeIndex : public Index 
 {
 public:
-  BplusTreeIndex() = default;
+  BplusTreeIndex(bool unique) : Index(unique) {};
+  BplusTreeIndex() : BplusTreeIndex(false) {};
   virtual ~BplusTreeIndex() noexcept;
 
-  RC create(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
-  RC open(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
+  RC create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_meta, RecordFileHandler *file_handler);
+  RC open(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_metas, RecordFileHandler *file_handler);
   RC close();
 
   RC insert_entry(const char *record, const RID *rid) override;
@@ -45,6 +47,11 @@ public:
 private:
   bool inited_ = false;
   BplusTreeHandler index_handler_;
+  std::vector<int> lens_;
+  std::vector<int> offsets_;
+  std::vector<AttrType> types_;
+  size_t col_count_;
+  RecordFileHandler *file_handler_;
 };
 
 /**

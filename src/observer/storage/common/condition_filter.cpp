@@ -14,7 +14,9 @@ See the Mulan PSL v2 for more details. */
 
 #include <stddef.h>
 #include <math.h>
+#include "common/lang/comparator.h"
 #include "condition_filter.h"
+#include "sql/parser/parse_defs.h"
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "storage/table/table.h"

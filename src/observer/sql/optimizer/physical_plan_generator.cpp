@@ -138,6 +138,7 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
   }
 
   if (index != nullptr) {
+    // Fuck wrong
     ASSERT(value_expr != nullptr, "got an index but value expr is null ?");
 
     const Value               &value           = value_expr->get_value();
@@ -288,7 +289,7 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
   }
 
   oper = unique_ptr<PhysicalOperator>(
-      new UpdatePhysicalOperator(update_oper.table(), update_oper.attribute_name(), update_oper.value()));
+      new UpdatePhysicalOperator(update_oper.table(), update_oper.attribute_names(), update_oper.values()));
 
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));

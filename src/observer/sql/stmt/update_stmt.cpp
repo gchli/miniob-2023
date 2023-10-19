@@ -17,9 +17,10 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include <cstdint>
+#include <vector>
 
-UpdateStmt::UpdateStmt(Table *table, const Value &value, const std::string &attribute_name, FilterStmt *filter_stmt)
-    : table_(table), value_(value), attribute_name_(attribute_name), filter_stmt_(filter_stmt)
+UpdateStmt::UpdateStmt(Table *table, const std::vector<Value> &values, const std::vector<std::string> &attribute_names, FilterStmt *filter_stmt)
+    : table_(table), values_(values), attribute_names_(attribute_names), filter_stmt_(filter_stmt)
 {}
 
 UpdateStmt::~UpdateStmt()
@@ -55,7 +56,14 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     return rc;
   }
 
-  stmt = new UpdateStmt(table, update.value, update.attribute_name, filter_stmt);
+  std::vector<std::string> attribute_names;
+  std::vector<Value> values;
+  int col_cnt = update.update_list.size();
+  for (int i = 0; i < col_cnt; i++) {
+    attribute_names.emplace_back(update.update_list[i].attribute_name);
+    values.emplace_back(update.update_list[i].value);
+  }
+  stmt = new UpdateStmt(table, values, attribute_names, filter_stmt);
 
   return RC::SUCCESS;
 }

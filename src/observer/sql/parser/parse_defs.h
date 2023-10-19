@@ -65,6 +65,8 @@ enum CompOp
   LESS_THAN,    ///< "<"
   GREAT_EQUAL,  ///< ">="
   GREAT_THAN,   ///< ">"
+  STR_LIKE,     ///< "LIKE"
+  STR_NOT_LIKE, ///< "NOT LIKE"
   NO_OP
 };
 
@@ -140,14 +142,25 @@ struct DeleteSqlNode
 };
 
 /**
+  * update set a=xx, b=xx
+  * 记录 a xx, b xx
+  */
+struct UpdateListSqlNode
+{
+  std::string                   attribute_name;
+  Value                         value;
+};
+
+/**
  * @brief 描述一个update语句
  * @ingroup SQLParser
  */
 struct UpdateSqlNode
 {
   std::string                   relation_name;   ///< Relation to update
-  std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
-  Value                         value;           ///< 更新的值，仅支持一个字段
+  // std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
+  // Value                         value;           ///< 更新的值，仅支持一个字段
+  std::vector<UpdateListSqlNode> update_list;
   std::vector<ConditionSqlNode> conditions;
 };
 
@@ -195,7 +208,9 @@ struct CreateIndexSqlNode
 {
   std::string index_name;      ///< Index name
   std::string relation_name;   ///< Relation name
-  std::string attribute_name;  ///< Attribute name
+  // std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attributes; ///< Attribute names
+  bool unique;
 };
 
 /**

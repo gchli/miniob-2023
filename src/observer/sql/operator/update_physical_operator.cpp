@@ -1,12 +1,12 @@
 #include "sql/operator/update_physical_operator.h"
 
 #include "common/log/log.h"
-#include "sql/operator/delete_physical_operator.h"
 #include "storage/field/field_meta.h"
 #include "storage/record/record.h"
 
 #include "storage/trx/trx.h"
 #include "sql/stmt/delete_stmt.h"
+#include <sstream>
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {
@@ -23,12 +23,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   trx_ = trx;
 
-  const FieldMeta *field_meta;
-  rc = table_->get_field_meta_by_name(field_meta, attribute_name_);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to open child operator: %s", strrc(rc));
-    return rc;
-  }
   return RC::SUCCESS;
 }
 
@@ -50,20 +44,16 @@ RC UpdatePhysicalOperator::next()
     RowTuple *row_tuple  = static_cast<RowTuple *>(tuple);
     Record   &old_record = row_tuple->record();
     Record    new_record;
-    rc = table_->make_update_record(new_record, old_record, attribute_name_, value_);
+    rc = table_->make_update_record(new_record, old_record, attribute_names_, values_);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
-    rc = trx_->delete_record(table_, old_record);
+    new_record.set_rid(old_record.rid());
+    rc = trx_->update_record(table_, old_record, new_record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
-    }
-
-    rc = trx_->insert_record(table_, new_record);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to update record by transaction. rc=%s", strrc(rc));
     }
   }
 
@@ -76,4 +66,13 @@ RC UpdatePhysicalOperator::close()
     children_[0]->close();
   }
   return RC::SUCCESS;
+}
+
+std::string UpdatePhysicalOperator::param() const {
+  std::stringstream ss;
+  ss << this->table_->name();
+  for (int i = 0; i < attribute_names_.size(); i++) {
+    ss << " " << this->attribute_names_[i] << "=" << this->values_[i].to_string();
+  }
+  return ss.str();
 }

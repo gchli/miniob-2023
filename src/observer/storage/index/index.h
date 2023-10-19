@@ -37,7 +37,8 @@ class IndexScanner;
 class Index 
 {
 public:
-  Index() = default;
+  Index(bool unique) : unique_(unique) {};
+  Index() : Index(false) {};
   virtual ~Index() = default;
 
   const IndexMeta &index_meta() const
@@ -81,11 +82,12 @@ public:
   virtual RC sync() = 0;
 
 protected:
-  RC init(const IndexMeta &index_meta, const FieldMeta &field_meta);
+  RC init(const IndexMeta &index_meta, const FieldMeta &field_metas);
 
 protected:
   IndexMeta index_meta_;  ///< 索引的元数据
   FieldMeta field_meta_;  ///< 当前实现仅考虑一个字段的索引
+  bool unique_;           ///< 是否唯一索引
 };
 
 /**

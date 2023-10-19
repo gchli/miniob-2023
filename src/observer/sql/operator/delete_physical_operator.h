@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/physical_operator.h"
+#include "storage/record/record.h"
 
 class Trx;
 class DeleteStmt;
@@ -48,4 +49,5 @@ public:
 private:
   Table *table_ = nullptr;
   Trx *trx_ = nullptr;
+  std::vector<Record> records;
 };

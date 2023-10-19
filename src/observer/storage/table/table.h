@@ -64,7 +64,7 @@ public:
   RC open(const char *meta_file, const char *base_dir);
 
   // 制作一个新的Record，使用对应的Attr与Value替换，用来update
-  RC make_update_record(Record &new_record, Record &old_record, const std::string &attribute, const Value &value);
+  RC make_update_record(Record &new_record, Record &old_record, const std::vector<std::string> &attributes, const std::vector<Value> &values);
 
   // 通过attribute获得FieldMeta，或许应该移动到tablemeta中
   RC get_field_meta_by_name(FieldMeta const *&field_meta, const std::string &attribute);
@@ -87,11 +87,12 @@ public:
   RC delete_record(const Record &record);
   RC visit_record(const RID &rid, bool readonly, std::function<void(Record &)> visitor);
   RC get_record(const RID &rid, Record &record);
+  RC update_record(const Record &old_record, const Record &new_record);
 
   RC recover_insert_record(Record &record);
 
   // TODO refactor
-  RC create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name);
+  RC create_index(Trx *trx, const std::vector<const FieldMeta *> &field_metas, const char *index_name, bool unique);
 
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly);
 

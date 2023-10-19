@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <limits>
+#include "common/log/log.h"
 #include "storage/trx/mvcc_trx.h"
 #include "storage/field/field.h"
 #include "storage/clog/clog.h"
@@ -184,6 +185,12 @@ RC MvccTrx::delete_record(Table * table, Record &record)
 
   return RC::SUCCESS;
 }
+
+RC MvccTrx::update_record(Table *table, const Record &old_record, const Record &new_record) {
+  LOG_ERROR("mvcc update record not implemente");
+  return RC::INTERNAL;
+}
+
 
 RC MvccTrx::visit_record(Table *table, Record &record, bool readonly)
 {
