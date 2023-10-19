@@ -106,7 +106,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   iter = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
     return expr->type() != ExprType::AGGREGATE;
   });
-  if (iter != all_exprs.end()) {
+  if (has_aggr && (iter != all_exprs.end())) {
     LOG_WARN("select stmt has both aggregate and non-aggregate exprs.");
     return RC::INVALID_ARGUMENT;
   }
