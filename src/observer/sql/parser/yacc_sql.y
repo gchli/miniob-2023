@@ -98,6 +98,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         LE
         GE
         NE
+        MAX
+        MIN
+        AVG
+        SUM
+        COUNT
         LIKE
         NOT
         UNIQUE
@@ -108,6 +113,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   ConditionSqlNode *                condition;
   Value *                           value;
   enum CompOp                       comp;
+  enum AggrType                     aggr_t;
+  RelAttrSqlNode *                  aggr_func;
   RelAttrSqlNode *                  rel_attr;
   std::vector<AttrInfoSqlNode> *    attr_infos;
   AttrInfoSqlNode *                 attr_info;
@@ -133,6 +140,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
+%type <aggr_t>              aggr_type
+%type <aggr_func>           aggr_func
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
@@ -272,7 +281,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      
+
       if ($8 != nullptr) {
         create_index.attributes = *$8;
       } else {
@@ -281,7 +290,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       std::string first = $7;
       create_index.attributes.insert(create_index.attributes.begin(), first);
       create_index.unique = false;
-      
+
       free($3);
       free($5);
       free($7);
@@ -293,7 +302,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $4;
       create_index.relation_name = $6;
-      
+
       if ($9 != nullptr) {
         create_index.attributes = *$9;
       } else {
@@ -302,7 +311,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       std::string first = $8;
       create_index.attributes.insert(create_index.attributes.begin(), first);
       create_index.unique = true;
-      
+
       free($4);
       free($6);
       free($8);
@@ -399,6 +408,40 @@ type:
     | FLOAT_T  { $$=FLOATS; }
     | DATE_T   { $$=DATES; }
     ;
+aggr_type:
+    MAX { $$=MAX_T; }
+    | MIN { $$=MIN_T; }
+    | AVG { $$=AVG_T; }
+    | SUM { $$=SUM_T; }
+    | COUNT { $$=COUNT_T; }
+    ;
+
+aggr_func:
+    aggr_type LBRACE ID RBRACE
+    {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = true;
+      $$->aggr_type = $1;
+      $$->attribute_name = $3;
+      free($3);
+    }
+    | aggr_type LBRACE ID DOT ID RBRACE {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = true;
+      $$->aggr_type = $1;
+      $$->relation_name  = $3;
+      $$->attribute_name = $5;
+      free($3);
+      free($5);
+		}
+		| aggr_type LBRACE '*' RBRACE {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = true;
+      $$->aggr_type = $1;
+      $$->attribute_name = "*";
+		}
+    ;
+
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE
     {
@@ -571,6 +614,8 @@ select_attr:
     '*' {
       $$ = new std::vector<RelAttrSqlNode>;
       RelAttrSqlNode attr;
+      attr.is_aggr = false;
+      attr.is_func = false;
       attr.relation_name  = "";
       attr.attribute_name = "*";
       $$->emplace_back(attr);
@@ -584,16 +629,27 @@ select_attr:
       $$->emplace_back(*$1);
       delete $1;
     }
+    | aggr_func attr_list {
+      if ($2 != nullptr) {
+        $$ = $2;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$1);
+      delete $1;
+      }
     ;
 
 rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
       $$->attribute_name = $1;
       free($1);
     }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
       free($1);
@@ -607,6 +663,16 @@ attr_list:
       $$ = nullptr;
     }
     | COMMA rel_attr attr_list {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+
+      $$->emplace_back(*$2);
+      delete $2;
+    }
+    | COMMA aggr_func attr_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {

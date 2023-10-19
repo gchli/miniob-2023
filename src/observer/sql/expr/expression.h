@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <string>
 
+#include "sql/expr/tuple_cell.h"
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
@@ -33,7 +34,7 @@ class Tuple;
  * @brief 表达式类型
  * @ingroup Expression
  */
-enum class ExprType 
+enum class ExprType
 {
   NONE,
   STAR,         ///< 星号，表示所有字段
@@ -43,6 +44,8 @@ enum class ExprType
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
+  AGGREGATE,    ///< 聚合函数
+  FUNCTION,     ///< 函数
 };
 
 /**
@@ -56,10 +59,10 @@ enum class ExprType
  * 才能计算出来真实的值。但是有些表达式可能就表示某一个固定的
  * 值，比如ValueExpr。
  */
-class Expression 
+class Expression
 {
 public:
-  Expression() = default;
+  Expression()          = default;
   virtual ~Expression() = default;
 
   /**
@@ -71,10 +74,7 @@ public:
    * @brief 在没有实际运行的情况下，也就是无法获取tuple的情况下，尝试获取表达式的值
    * @details 有些表达式的值是固定的，比如ValueExpr，这种情况下可以直接获取值
    */
-  virtual RC try_get_value(Value &value) const
-  {
-    return RC::UNIMPLENMENT;
-  }
+  virtual RC try_get_value(Value &value) const { return RC::UNIMPLENMENT; }
 
   /**
    * @brief 表达式的类型
@@ -92,24 +92,26 @@ public:
    * @brief 表达式的名字，比如是字段名称，或者用户在执行SQL语句时输入的内容
    */
   virtual std::string name() const { return name_; }
-  virtual void set_name(std::string name) { name_ = name; }
+  virtual void        set_name(std::string name) { name_ = name; }
+
+  virtual const char *table_name() const { return ""; }
+  virtual const char *field_name() const { return ""; }
+  virtual const Field get_field() const { return {}; }
 
 private:
-  std::string  name_;
+  std::string name_;
 };
 
 /**
  * @brief 字段表达式
  * @ingroup Expression
  */
-class FieldExpr : public Expression 
+class FieldExpr : public Expression
 {
 public:
   FieldExpr() = default;
-  FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field)
-  {}
-  FieldExpr(const Field &field) : field_(field)
-  {}
+  FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field) {}
+  FieldExpr(const Field &field) : field_(field) {}
 
   virtual ~FieldExpr() = default;
 
@@ -119,10 +121,10 @@ public:
   Field &field() { return field_; }
 
   const Field &field() const { return field_; }
+  const Field  get_field() const override { return field_; }
+  const char  *table_name() const override { return field_.table_name(); }
 
-  const char *table_name() const { return field_.table_name(); }
-
-  const char *field_name() const { return field_.field_name(); }
+  const char *field_name() const override { return field_.field_name(); }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -134,17 +136,20 @@ private:
  * @brief 常量值表达式
  * @ingroup Expression
  */
-class ValueExpr : public Expression 
+class ValueExpr : public Expression
 {
 public:
   ValueExpr() = default;
-  explicit ValueExpr(const Value &value) : value_(value)
-  {}
+  explicit ValueExpr(const Value &value) : value_(value) {}
 
   virtual ~ValueExpr() = default;
 
   RC get_value(const Tuple &tuple, Value &value) const override;
-  RC try_get_value(Value &value) const override { value = value_; return RC::SUCCESS; }
+  RC try_get_value(Value &value) const override
+  {
+    value = value_;
+    return RC::SUCCESS;
+  }
 
   ExprType type() const override { return ExprType::VALUE; }
 
@@ -162,17 +167,14 @@ private:
  * @brief 类型转换表达式
  * @ingroup Expression
  */
-class CastExpr : public Expression 
+class CastExpr : public Expression
 {
 public:
   CastExpr(std::unique_ptr<Expression> child, AttrType cast_type);
   virtual ~CastExpr();
 
-  ExprType type() const override
-  {
-    return ExprType::CAST;
-  }
-  RC get_value(const Tuple &tuple, Value &value) const override;
+  ExprType type() const override { return ExprType::CAST; }
+  RC       get_value(const Tuple &tuple, Value &value) const override;
 
   RC try_get_value(Value &value) const override;
 
@@ -184,15 +186,15 @@ private:
   RC cast(const Value &value, Value &cast_value) const;
 
 private:
-  std::unique_ptr<Expression> child_;  ///< 从这个表达式转换
-  AttrType cast_type_;  ///< 想要转换成这个类型
+  std::unique_ptr<Expression> child_;      ///< 从这个表达式转换
+  AttrType                    cast_type_;  ///< 想要转换成这个类型
 };
 
 /**
  * @brief 比较表达式
  * @ingroup Expression
  */
-class ComparisonExpr : public Expression 
+class ComparisonExpr : public Expression
 {
 public:
   ComparisonExpr(CompOp comp, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
@@ -206,7 +208,7 @@ public:
 
   CompOp comp() const { return comp_; }
 
-  std::unique_ptr<Expression> &left()  { return left_;  }
+  std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
 
   /**
@@ -222,7 +224,7 @@ public:
   RC compare_value(const Value &left, const Value &right, bool &value) const;
 
 private:
-  CompOp comp_;
+  CompOp                      comp_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
 };
@@ -233,10 +235,11 @@ private:
  * 多个表达式使用同一种关系(AND或OR)来联结
  * 当前miniob仅有AND操作
  */
-class ConjunctionExpr : public Expression 
+class ConjunctionExpr : public Expression
 {
 public:
-  enum class Type {
+  enum class Type
+  {
     AND,
     OR,
   };
@@ -256,7 +259,7 @@ public:
   std::vector<std::unique_ptr<Expression>> &children() { return children_; }
 
 private:
-  Type conjunction_type_;
+  Type                                     conjunction_type_;
   std::vector<std::unique_ptr<Expression>> children_;
 };
 
@@ -264,10 +267,11 @@ private:
  * @brief 算术表达式
  * @ingroup Expression
  */
-class ArithmeticExpr : public Expression 
+class ArithmeticExpr : public Expression
 {
 public:
-  enum class Type {
+  enum class Type
+  {
     ADD,
     SUB,
     MUL,
@@ -294,9 +298,76 @@ public:
 
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
-  
+
 private:
-  Type arithmetic_type_;
+  Type                        arithmetic_type_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
+};
+
+class AggregateExpr : public Expression
+{
+public:
+public:
+  AggregateExpr() = default;
+  AggregateExpr(AggrType type, FieldExpr field) : aggregate_type_(type), field_(field) {}
+  AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta)
+      : aggregate_type_(type), field_(table, field_meta)
+  {}
+  AggregateExpr(const AggregateExpr &other) = default;
+  virtual ~AggregateExpr()                  = default;  // todo(ligch)
+
+  ExprType    type() const override { return ExprType::AGGREGATE; }
+  std::string name() const override;
+  std::string name(bool with_table) const;
+  AttrType    value_type() const override { return AttrType::INTS; }
+
+  RC   get_value(const Tuple &tuple, Value &value) const override;
+  void set_value(const Value &value) { val_ = value; }
+  RC   try_get_value(Value &value) const override;
+
+  AggrType         aggregate_type() const { return aggregate_type_; }
+  const FieldExpr &get_field_expr() const { return field_; }
+  const Field      get_field() const override { return field_.field(); }
+  const Field     &field() { return field_.field(); }
+  const char      *table_name() const override { return field_.table_name(); }
+  const char      *field_name() const override { return field_.field_name(); }
+
+private:
+  AggrType  aggregate_type_;
+  FieldExpr field_;
+  Value     val_;
+};
+
+class FunctionExpr : public Expression
+{
+public:
+  enum class Type
+  {
+    LENGTH,
+    ROUND,
+    DATE_FORMAT,
+  };
+
+public:
+  FunctionExpr(Type type, Expression *left, Expression *right);
+  FunctionExpr(Type type, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
+  virtual ~FunctionExpr() = default;  // todo(ligch)
+
+  ExprType type() const override { return ExprType::FUNCTION; }
+
+  AttrType value_type() const override;
+
+  RC          get_value(const Tuple &tuple, Value &value) const override;
+  RC          try_get_value(Value &value) const override;
+  void        set_value(const Value &value) { val_ = value; }
+  Type        function_type() const { return function_type_; }
+  Expression *left() const { return left_; }
+  Expression *right() const { return right_; }
+
+private:
+  Value       val_;
+  Type        function_type_;
+  Expression *left_{nullptr};
+  Expression *right_{nullptr};
 };

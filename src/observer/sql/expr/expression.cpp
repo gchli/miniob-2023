@@ -13,9 +13,12 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/rc.h"
 #include "common/lang/comparator.h"
 #include "common/log/log.h"
 #include "sql/expr/tuple.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/parser/value.h"
 #include "sql/parser/parse_defs.h"
 
 using namespace std;
@@ -32,12 +35,10 @@ RC ValueExpr::get_value(const Tuple &tuple, Value &value) const
 }
 
 /////////////////////////////////////////////////////////////////////////////////
-CastExpr::CastExpr(unique_ptr<Expression> child, AttrType cast_type)
-    : child_(std::move(child)), cast_type_(cast_type)
+CastExpr::CastExpr(unique_ptr<Expression> child, AttrType cast_type) : child_(std::move(child)), cast_type_(cast_type)
 {}
 
-CastExpr::~CastExpr()
-{}
+CastExpr::~CastExpr() {}
 
 RC CastExpr::cast(const Value &value, Value &cast_value) const
 {
@@ -86,33 +87,28 @@ ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_
     : comp_(comp), left_(std::move(left)), right_(std::move(right))
 {}
 
-ComparisonExpr::~ComparisonExpr()
-{}
+ComparisonExpr::~ComparisonExpr() {}
 
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
+
   RC rc = RC::SUCCESS;
   if (comp_ == STR_LIKE || comp_ == STR_NOT_LIKE) {
-  if (left.attr_type() == CHARS && left.attr_type() == right.attr_type()) {
-    bool cmp_result = left.compare_like(right);
-    switch (comp_) {
-    case STR_LIKE:
-      result = cmp_result;
-      break;
-    case STR_NOT_LIKE:
-      result = !cmp_result;
-      break;
-    default:
-      return RC::INTERNAL;
+    if (left.attr_type() == CHARS && left.attr_type() == right.attr_type()) {
+      bool cmp_result = left.compare_like(right);
+      switch (comp_) {
+        case STR_LIKE: result = cmp_result; break;
+        case STR_NOT_LIKE: result = !cmp_result; break;
+        default: return RC::INTERNAL;
+      }
+      return rc;
     }
-    return rc;
-  }
     LOG_ERROR("type is not char for like compare");
     return RC::INTERNAL;
   }
 
   int cmp_result = left.compare(right);
-  result = false;
+  result         = false;
   switch (comp_) {
     case EQUAL_TO: {
       result = (0 == cmp_result);
@@ -144,13 +140,13 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
 RC ComparisonExpr::try_get_value(Value &cell) const
 {
   if (left_->type() == ExprType::VALUE && right_->type() == ExprType::VALUE) {
-    ValueExpr *left_value_expr = static_cast<ValueExpr *>(left_.get());
-    ValueExpr *right_value_expr = static_cast<ValueExpr *>(right_.get());
-    const Value &left_cell = left_value_expr->get_value();
-    const Value &right_cell = right_value_expr->get_value();
+    ValueExpr   *left_value_expr  = static_cast<ValueExpr *>(left_.get());
+    ValueExpr   *right_value_expr = static_cast<ValueExpr *>(right_.get());
+    const Value &left_cell        = left_value_expr->get_value();
+    const Value &right_cell       = right_value_expr->get_value();
 
     bool value = false;
-    RC rc = compare_value(left_cell, right_cell, value);
+    RC   rc    = compare_value(left_cell, right_cell, value);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to compare tuple cells. rc=%s", strrc(rc));
     } else {
@@ -179,7 +175,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   }
 
   bool bool_value = false;
-  rc = compare_value(left_value, right_value, bool_value);
+  rc              = compare_value(left_value, right_value, bool_value);
   if (rc == RC::SUCCESS) {
     value.set_boolean(bool_value);
   }
@@ -233,12 +229,11 @@ AttrType ArithmeticExpr::value_type() const
     return left_->value_type();
   }
 
-  if (left_->value_type() == AttrType::INTS &&
-      right_->value_type() == AttrType::INTS &&
+  if (left_->value_type() == AttrType::INTS && right_->value_type() == AttrType::INTS &&
       arithmetic_type_ != Type::DIV) {
     return AttrType::INTS;
   }
-  
+
   return AttrType::FLOATS;
 }
 
@@ -276,14 +271,16 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     case Type::DIV: {
       if (target_type == AttrType::INTS) {
         if (right_value.get_int() == 0) {
-          // NOTE: 设置为整数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为整数最大值。
+          // NOTE:
+          // 设置为整数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为整数最大值。
           value.set_int(numeric_limits<int>::max());
         } else {
           value.set_int(left_value.get_int() / right_value.get_int());
         }
       } else {
         if (right_value.get_float() > -EPSILON && right_value.get_float() < EPSILON) {
-          // NOTE: 设置为浮点数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为浮点数最大值。
+          // NOTE:
+          // 设置为浮点数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为浮点数最大值。
           value.set_float(numeric_limits<float>::max());
         } else {
           value.set_float(left_value.get_float() / right_value.get_float());
@@ -349,4 +346,44 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   }
 
   return calc_value(left_value, right_value, value);
+}
+
+std::string AggregateExpr::name() const { return name(false); }
+
+std::string AggregateExpr::name(bool with_table) const
+{
+  std::string ret = "";
+  switch (aggregate_type_) {
+    case MAX_T: ret += "MAX"; break;
+    case MIN_T: ret += "MIN"; break;
+    case SUM_T: ret += "SUM"; break;
+    case COUNT_T: ret += "COUNT"; break;
+    case AVG_T: ret += "AVG"; break;
+    default: ret += "ERROR_AGGR"; break;
+  }
+  ret += "(";
+  if (with_table) {
+    ret += field_.table_name();
+    ret += ".";
+  }
+  if (field_.value_type() == AttrType::UNDEFINED) {
+    ret += "*";
+  } else {
+    ret += field_.field_name();
+  }
+  ret += ")";
+  std::transform(ret.begin(), ret.end(), ret.begin(), [](char const &c) { return std::toupper(c); });
+  return ret;
+}
+
+RC AggregateExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  value = val_;
+  return RC::SUCCESS;
+}
+
+RC AggregateExpr::try_get_value(Value &value) const
+{
+  value = val_;
+  return RC::SUCCESS;
 }

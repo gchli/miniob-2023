@@ -27,6 +27,16 @@ class Expression;
  * @defgroup SQLParser SQL Parser
  */
 
+enum AggrType
+{
+  INVALID_T,
+  MAX_T,
+  MIN_T,
+  AVG_T,
+  SUM_T,
+  COUNT_T
+};
+
 /**
  * @brief 描述一个属性
  * @ingroup SQLParser
@@ -38,6 +48,9 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+  bool        is_aggr;
+  AggrType    aggr_type;
+  bool        is_func;
 };
 
 /**

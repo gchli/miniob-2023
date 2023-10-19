@@ -13,11 +13,15 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/select_stmt.h"
+#include "sql/expr/expression.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/filter_stmt.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "storage/db/db.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table.h"
+#include <memory>
 
 SelectStmt::~SelectStmt()
 {
@@ -30,9 +34,18 @@ SelectStmt::~SelectStmt()
 static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
 {
   const TableMeta &table_meta = table->table_meta();
-  const int field_num = table_meta.field_num();
+  const int        field_num  = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     field_metas.push_back(Field(table, table_meta.field(i)));
+  }
+}
+
+static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &field_metas)
+{
+  const TableMeta &table_meta = table->table_meta();
+  const int        field_num  = table_meta.field_num();
+  for (int i = table_meta.sys_field_num(); i < field_num; i++) {
+    field_metas.push_back(make_shared<FieldExpr>(table, table_meta.field(i)));
   }
 }
 
@@ -44,7 +57,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   // collect tables in `from` statement
-  std::vector<Table *> tables;
+  std::vector<Table *>                     tables;
   std::unordered_map<std::string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].c_str();
@@ -64,14 +77,60 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   // collect query fields in `select` statement
-  std::vector<Field> query_fields;
+  // std::vector<Field>      query_fields;
+  std::vector<shared_ptr<Expression>> query_exprs;
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
+
+    if (relation_attr.is_aggr) {
+      AggrType    aggr_type  = relation_attr.aggr_type;
+      const char *table_name = relation_attr.relation_name.c_str();
+      const char *field_name = relation_attr.attribute_name.c_str();
+      if (!common::is_blank(relation_attr.relation_name.c_str())) {
+        auto iter = table_map.find(table_name);
+        if (iter == table_map.end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        auto             table      = iter->second;
+        const FieldMeta *field_meta = table->table_meta().field(field_name);
+        if (nullptr == field_meta) {
+          if ((0 == strcmp(field_name, "*"))) {
+            field_meta = new FieldMeta();
+          } else {
+            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
+      } else {
+        if (tables.size() != 1) {
+          LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+
+        Table           *table      = tables[0];
+        const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
+        if (nullptr == field_meta) {
+          if ((0 == strcmp(field_name, "*"))) {
+            field_meta = new FieldMeta();
+          } else {
+            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+
+        // query_fields.push_back(Field(table, field_meta));
+        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
+      }
+      continue;
+    }
 
     if (common::is_blank(relation_attr.relation_name.c_str()) &&
         0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
       for (Table *table : tables) {
-        wildcard_fields(table, query_fields);
+        // wildcard_fields(table, query_fields);
+        wildcard_fields(table, query_exprs);
       }
 
     } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
@@ -84,7 +143,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields);
+          // wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_exprs);
         }
       } else {
         auto iter = table_map.find(table_name);
@@ -95,15 +155,16 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_fields);
+          // wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_exprs);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-
-          query_fields.push_back(Field(table, field_meta));
+          query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
+          // query_fields.push_back(Field(table, field_meta));
         }
       }
     } else {
@@ -112,19 +173,20 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         return RC::SCHEMA_FIELD_MISSING;
       }
 
-      Table *table = tables[0];
+      Table           *table      = tables[0];
       const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
       if (nullptr == field_meta) {
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
         return RC::SCHEMA_FIELD_MISSING;
       }
 
-      query_fields.push_back(Field(table, field_meta));
+      // query_fields.push_back(Field(table, field_meta));
+      query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
     }
   }
 
-  LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
-
+  // LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
+  LOG_INFO("got %d tables in from stmt and %d fields/exprs in query stmt", tables.size(), query_exprs.size());
   Table *default_table = nullptr;
   if (tables.size() == 1) {
     default_table = tables[0];
@@ -132,7 +194,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  RC rc = FilterStmt::create(db,
+  RC          rc          = FilterStmt::create(db,
       default_table,
       &table_map,
       select_sql.conditions.data(),
@@ -147,8 +209,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
   // TODO add expression copy
   select_stmt->tables_.swap(tables);
-  select_stmt->query_fields_.swap(query_fields);
+  // select_stmt->query_fields_.swap(query_fields);
+  select_stmt->query_exprs_.swap(query_exprs);
   select_stmt->filter_stmt_ = filter_stmt;
-  stmt = select_stmt;
+  stmt                      = select_stmt;
   return RC::SUCCESS;
 }
