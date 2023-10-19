@@ -14,13 +14,14 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/bplus_tree_index.h"
 #include "common/log/log.h"
+#include "storage/record/record_manager.h"
 
 BplusTreeIndex::~BplusTreeIndex() noexcept
 {
   close();
 }
 
-RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_metas)
+RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_metas, RecordFileHandler *file_handler)
 {
   if (inited_) {
     LOG_WARN("Failed to create index due to the index has been created before. file_name:%s, index:%s, field:%s",
@@ -35,6 +36,13 @@ RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, co
   // }
   
   Index::init(index_meta, *field_metas[0]);
+  file_handler_ = file_handler;
+  col_count_ = field_metas.size();
+  for (size_t i = 0; i < col_count_; i++) {
+    offsets_.push_back(field_metas[i]->offset());
+    lens_.push_back(field_metas[i]->len());
+    types_.push_back(field_metas[i]->type());
+  }
 
   RC rc = index_handler_.create(file_name, field_meta_.type(), field_meta_.len());
   if (RC::SUCCESS != rc) {
@@ -93,6 +101,51 @@ RC BplusTreeIndex::close()
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 {
+  if (unique_) {
+    RC rc;
+    IndexScanner *scanner = create_scanner(
+      record + field_meta_.offset(), field_meta_.len(), true,
+      record + field_meta_.offset(), field_meta_.len(), true
+    );
+    if (scanner != nullptr) {
+      if (col_count_ > 1) {
+        RID rid;
+        RecordPageHandler record_page_handler;
+        record_page_handler.cleanup();
+        while ((rc = scanner->next_entry(&rid)) == RC::SUCCESS) {
+          Record oldrec;
+          file_handler_->get_record(record_page_handler, &rid, true, &oldrec);
+          bool all_equal = true;
+          for (size_t i = 0; i < col_count_; i++) {
+            int off = offsets_[i];
+            int len = lens_[i];
+            AttrType attr_type = types_[i];
+            // if any column is null, don't insert into index
+            // if (is_mem_null((void *)(record + off), attr_type, len)) {
+            //   scanner->destroy();
+            //   return RC::SUCCESS;
+            // }
+            if (strncmp(record + off, oldrec.data() + off, len) != 0) {
+              all_equal = false;
+              break;
+            }
+          }
+          if (all_equal) {
+            scanner->destroy();
+            return RC::RECORD_DUPLICATE_KEY;
+          }
+        }
+      } else {
+        RID unused_rid;
+        rc = scanner->next_entry(&unused_rid);
+        if (rc == RC::SUCCESS) {
+          scanner->destroy();
+          return RC::RECORD_DUPLICATE_KEY;
+        }
+      }
+      scanner->destroy();
+    }
+  }
   return index_handler_.insert_entry(record + field_meta_.offset(), rid);
 }
 

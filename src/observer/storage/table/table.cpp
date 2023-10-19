@@ -454,7 +454,7 @@ RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const std::vector<const FieldMeta *> &field_metas, const char *index_name)
+RC Table::create_index(Trx *trx, const std::vector<const FieldMeta *> &field_metas, const char *index_name, bool unique)
 {
   if (common::is_blank(index_name) || field_metas.empty()) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
@@ -470,9 +470,9 @@ RC Table::create_index(Trx *trx, const std::vector<const FieldMeta *> &field_met
   }
 
   // 创建索引相关数据
-  BplusTreeIndex *index      = new BplusTreeIndex();
+  BplusTreeIndex *index      = new BplusTreeIndex(unique);
   std::string     index_file = table_index_file(base_dir_.c_str(), name(), index_name);
-  rc                         = index->create(index_file.c_str(), new_index_meta, field_metas);
+  rc                         = index->create(index_file.c_str(), new_index_meta, field_metas, record_handler_);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
