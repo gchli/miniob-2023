@@ -13,6 +13,11 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/project_logical_operator.h"
+#include "sql/expr/expression.h"
+#include <memory>
 
-ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields) : fields_(fields)
+// ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields) : fields_(fields) {}
+
+ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<shared_ptr<Expression>> &proj_expr)
+    : proj_exprs_(proj_expr)
 {}
