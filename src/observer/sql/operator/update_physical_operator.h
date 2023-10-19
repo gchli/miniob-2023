@@ -13,8 +13,8 @@ class DeleteStmt;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table, const std::string &attribute_name, const Value &value)
-      : table_(table), attribute_name_(attribute_name), value_(value)
+  UpdatePhysicalOperator(Table *table, const std::vector<std::string> &attribute_names, const std::vector<Value> &values)
+      : table_(table), attribute_names_(attribute_names), values_(values)
   {}
 
   virtual ~UpdatePhysicalOperator() = default;
@@ -27,9 +27,11 @@ public:
 
   Tuple *current_tuple() override { return nullptr; }
 
+  std::string param() const override;
+
 private:
   Table      *table_ = nullptr;
-  std::string attribute_name_;
-  Value       value_;
+  std::vector<std::string> attribute_names_;
+  std::vector<Value>       values_;
   Trx        *trx_ = nullptr;
 };

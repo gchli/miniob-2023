@@ -118,6 +118,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
   std::vector<std::string> *        attribute_list;
+  std::vector<UpdateListSqlNode> *  update_list;
   char *                            string;
   int                               number;
   float                             floats;
@@ -148,6 +149,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <attribute_list>      id_list
+%type <update_list>         update_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -456,20 +458,40 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where
+    UPDATE ID SET ID EQ value update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
+      $$->update.update_list.emplace_back(UpdateListSqlNode{$4, *$6});
       if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+        $$->update.update_list.insert($$->update.update_list.end(), $7->begin(), $7->end());
+      }
+      if ($8 != nullptr) {
+        $$->update.conditions.swap(*$8);
+        delete $8;
       }
       free($2);
       free($4);
+      free($7);
     }
     ;
+
+update_list:
+    {
+      $$ = nullptr;
+    }
+    | COMMA ID EQ value update_list
+    {
+      if ($5 == nullptr) {
+        $$ = new std::vector<UpdateListSqlNode>;
+      } else {
+        $$ = $5;
+      }
+      $$->emplace_back(UpdateListSqlNode{$2, *$4});
+      free($4);
+    }
+    ;
+
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT select_attr FROM ID rel_list where
     {

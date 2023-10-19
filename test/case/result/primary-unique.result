@@ -41,10 +41,10 @@ SUCCESS
 select * from unique_table2;
 1 | 4 | 1 | 1
 2 | 2 | 2 | 2
-ID | COL1 | COL2 | COL3
+ID1 | ID2 | COL1 | COL2
 update unique_table2 set id1=1,id2=4 where col1=2;
 FAILURE
 select * from unique_table2;
 1 | 4 | 1 | 1
 2 | 2 | 2 | 2
-ID | COL1 | COL2 | COL3
+ID1 | ID2 | COL1 | COL2

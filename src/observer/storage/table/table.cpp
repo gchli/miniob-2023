@@ -362,49 +362,57 @@ RC Table::get_field_meta_by_name(FieldMeta const *&field_meta, const std::string
   return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
-RC Table::make_update_record(Record &new_record, Record &old_record, const std::string &attribute, const Value &value)
+RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<std::string> &attributes, const std::vector<Value> &values)
 {
   int   record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
   memcpy(record_data, old_record.data(), record_size);
 
-  for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
-    const FieldMeta *field = table_meta_.field(i);
-    // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
-    if (field->type() != value.attr_type()) {
-      if (field->type() == DATES && (strcmp(field->name(), attribute.c_str()) == 0) && value.attr_type() == CHARS) {
-        date_u date;
+  int col_count = attributes.size();
+  for (int i = 0; i < col_count; i++) {
+    const std::string &attribute = attributes[i];
+    const Value &value = values[i];
+    bool find = false;
 
-        if (RC::SUCCESS != str_to_date(value.get_string(), date)) {
-          return RC::INVALID_ARGUMENT;
+    for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
+      const FieldMeta *field = table_meta_.field(i);
+      // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
+      if (field->type() != value.attr_type()) {
+        if (field->type() == DATES && (strcmp(field->name(), attribute.c_str()) == 0) && value.attr_type() == CHARS) {
+          date_u date;
+
+          if (RC::SUCCESS != str_to_date(value.get_string(), date)) {
+            return RC::INVALID_ARGUMENT;
+          }
+          Value new_date_value(date);
+          memcpy(record_data + field->offset(), new_date_value.data(), field->len());
+          new_record.set_data_owner(record_data, record_size);
+          return RC::SUCCESS;
         }
-        Value new_date_value(date);
-        memcpy(record_data + field->offset(), new_date_value.data(), field->len());
-        new_record.set_data_owner(record_data, record_size);
-        return RC::SUCCESS;
+      }
+
+      if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
+        size_t copy_len = field->len();
+        if (field->type() == CHARS) {
+          const size_t data_len = value.length();
+          if (copy_len > data_len) {
+            copy_len = data_len + 1;
+          }
+        }
+
+        memcpy(record_data + field->offset(), value.data(), copy_len);
+        find = true;
       }
     }
 
-    if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
-
-      // if (field->type() == value.attr_type() && field->len() == value.length() &&
-      //     strcmp(field->name(), attribute.c_str()) == 0) {
-      size_t copy_len = field->len();
-      if (field->type() == CHARS) {
-        const size_t data_len = value.length();
-        if (copy_len > data_len) {
-          copy_len = data_len + 1;
-        }
-      }
-
-      memcpy(record_data + field->offset(), value.data(), copy_len);
-      new_record.set_data_owner(record_data, record_size);
-
-      return RC::SUCCESS;
+    if (!find) {
+      free(record_data);
+      return RC::SCHEMA_FIELD_NOT_EXIST;
     }
   }
+  new_record.set_data_owner(record_data, record_size);
 
-  return RC::SCHEMA_FIELD_NOT_EXIST;
+  return RC::SUCCESS;
 }
 
 RC Table::make_record(int value_num, const Value *values, Record &record)
