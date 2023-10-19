@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
+#include "storage/field/field_meta.h"
 #include <cstdint>
 #include <vector>
 
@@ -60,6 +61,21 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   std::vector<Value> values;
   int col_cnt = update.update_list.size();
   for (int i = 0; i < col_cnt; i++) {
+    const FieldMeta *field_meta;
+    const std::string attribute_name = update.update_list[i].attribute_name;
+    const Value value = update.update_list[i].value;
+    RC rc = table->get_field_meta_by_name(field_meta, attribute_name);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
+
+    if (field_meta->type() != value.attr_type()) {
+      rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+      return rc; 
+    }
+    
     attribute_names.emplace_back(update.update_list[i].attribute_name);
     values.emplace_back(update.update_list[i].value);
   }
