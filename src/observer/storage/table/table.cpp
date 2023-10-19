@@ -274,6 +274,46 @@ RC Table::get_record(const RID &rid, Record &record)
   return rc;
 }
 
+RC Table::update_record(const Record &old_record, const Record &new_record) {
+  RC rc = delete_entry_of_indexes(old_record.data(), old_record.rid(), false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to delete old indices when updating");
+    return rc;
+  }
+  rc = insert_entry_of_indexes(new_record.data(), new_record.rid());
+  if (rc == RC::RECORD_DUPLICATE_KEY) {
+    RC rc2 = insert_entry_of_indexes(old_record.data(), old_record.rid());
+    if (rc2 != RC::SUCCESS) {
+      LOG_ERROR("Failed to reinsert old record when updating unique has problem");
+      return rc2;
+    }
+    return rc;
+  } else if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to insert new indices when updating");
+    return rc;
+  }
+  record_handler_->update_record(new_record);
+  if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to update record using record_handler (rid=%d.%d). rc=%d:%s",
+        new_record.rid().page_num, new_record.rid().slot_num, rc, strrc(rc));
+      return rc;
+    }
+  // 前面的区域以后再来探索吧
+  // if (trx != nullptr) {
+  //   CLogRecord *clog_record = nullptr;
+  //   rc = clog_manager_->clog_gen_record(CLogType::REDO_INSERT, trx->get_current_id(), clog_record, name(), table_meta_.record_size(), new_rec);
+  //   if (rc != RC::SUCCESS) {
+  //     LOG_ERROR("Failed to create a clog record. rc=%d:%s", rc, strrc(rc));
+  //     return rc;
+  //   }
+  //   rc = clog_manager_->clog_append_record(clog_record);
+  //   if (rc != RC::SUCCESS) {
+  //     return rc;
+  //   }
+  // }
+  return rc;
+}
+
 RC Table::recover_insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;

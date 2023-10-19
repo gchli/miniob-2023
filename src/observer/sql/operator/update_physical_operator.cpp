@@ -55,16 +55,22 @@ RC UpdatePhysicalOperator::next()
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
-    rc = trx_->delete_record(table_, old_record);
+    new_record.set_rid(old_record.rid());
+    rc = trx_->update_record(table_, old_record, new_record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
+    // rc = trx_->delete_record(table_, old_record);
+    // if (rc != RC::SUCCESS) {
+    //   LOG_WARN("failed to update record: %s", strrc(rc));
+    //   return rc;
+    // }
 
-    rc = trx_->insert_record(table_, new_record);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to update record by transaction. rc=%s", strrc(rc));
-    }
+    // rc = trx_->insert_record(table_, new_record);
+    // if (rc != RC::SUCCESS) {
+    //   LOG_WARN("failed to update record by transaction. rc=%s", strrc(rc));
+    // }
   }
 
   return RC::RECORD_EOF;
