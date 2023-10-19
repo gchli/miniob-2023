@@ -11,3 +11,16 @@ INSERT INTO unique_table VALUES (1,2,1);
 
 -- echo 2. select
 -- sort SELECT * FROM unique_table;
+
+-- echo 3. update INFLUENCE
+update unique_table set id=2 where col1=1;
+
+-- echo 4. multi unique test
+CREATE TABLE unique_table2(id1 int, id2 int, col1 int, col2 int);
+create unique index index_id on unique_table2(id1,id2);
+INSERT INTO unique_table2 VALUES (1,1,1,1);
+INSERT INTO unique_table2 VALUES (2,2,2,2);
+update unique_table2 set id1=1,id2=4 where id2=1;
+select * from unique_table2;
+update unique_table2 set id1=1,id2=4 where col1=2;
+select * from unique_table2;
