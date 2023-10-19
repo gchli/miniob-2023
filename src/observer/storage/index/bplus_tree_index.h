@@ -30,7 +30,7 @@ public:
   virtual ~BplusTreeIndex() noexcept;
 
   RC create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_meta, RecordFileHandler *file_handler);
-  RC open(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
+  RC open(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta *> &field_metas, RecordFileHandler *file_handler);
   RC close();
 
   RC insert_entry(const char *record, const RID *rid) override;

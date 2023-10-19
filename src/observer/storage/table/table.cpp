@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <bits/types/FILE.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <string.h>
 #include <algorithm>
@@ -21,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/date.h"
 #include "common/defs.h"
 #include "sql/parser/value.h"
+#include "storage/field/field.h"
 #include "storage/field/field_meta.h"
 #include "storage/record/record.h"
 #include "sql/parser/value.h"
@@ -197,18 +199,22 @@ RC Table::open(const char *meta_file, const char *base_dir)
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->fields()[0].c_str());
-    if (field_meta == nullptr) {
+    std::vector<const FieldMeta *> field_metas;
+    for (const auto & field : index_meta->fields()) {
+      const FieldMeta *field_meta = table_meta_.field(field.c_str());
+      if (field_meta == nullptr) {
       LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
                 name(), index_meta->name(), index_meta->fields()[0].c_str());
       // skip cleanup
       //  do all cleanup action in destructive Table function
       return RC::INTERNAL;
-    }
+      }
+      field_metas.emplace_back(field_meta);
+    }    
 
-    BplusTreeIndex *index      = new BplusTreeIndex();
+    BplusTreeIndex *index      = new BplusTreeIndex(index_meta->unique());
     std::string     index_file = table_index_file(base_dir, name(), index_meta->name());
-    rc                         = index->open(index_file.c_str(), *index_meta, *field_meta);
+    rc                         = index->open(index_file.c_str(), *index_meta, field_metas, record_handler_);
     if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
@@ -502,7 +508,7 @@ RC Table::create_index(Trx *trx, const std::vector<const FieldMeta *> &field_met
   }
 
   IndexMeta new_index_meta;
-  RC        rc = new_index_meta.init(index_name, field_metas);
+  RC        rc = new_index_meta.init(index_name, field_metas, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s",
              name(), index_name, field_metas[0]->name());
@@ -622,10 +628,15 @@ RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error
   for (Index *index : indexes_) {
     rc = index->delete_entry(record, &rid);
     if (rc != RC::SUCCESS) {
-      if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
+      if (rc == RC::RECORD_NOT_EXIST && !error_on_not_exists) {
+        continue;
+      } else {
         break;
       }
     }
+  }
+  if (rc == RC::RECORD_NOT_EXIST && !error_on_not_exists) {
+    return RC::SUCCESS;
   }
   return rc;
 }
