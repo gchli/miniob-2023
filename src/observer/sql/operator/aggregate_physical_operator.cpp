@@ -55,6 +55,10 @@ void Aggregator::add_tuple(Tuple *tuple)
       }
     } break;
     case AVG_T: {
+      if (val.is_null()) {
+        val_ = val;
+        break;
+      }
       assert(rc == RC::SUCCESS);
       count_++;
       sum_ += val.get_float();
@@ -62,11 +66,19 @@ void Aggregator::add_tuple(Tuple *tuple)
 
     } break;
     case SUM_T: {
+      if (val.is_null()) {
+        val_ = val;
+        break;
+      }
       assert(rc == RC::SUCCESS);
       sum_ += val.get_float();
       val_ = val;
     } break;
     case COUNT_T: {
+      if (val.is_null()) {
+        val_ = val;
+        break;
+      }
       assert(rc == RC::SUCCESS);
       count_++;
       val_ = val;
@@ -87,6 +99,9 @@ Value Aggregator::get_result()
     return Value(FLOATS, (char *)&sum_, sizeof(float));
   }
   if (aggr_type_ == AVG_T) {
+    if (val_.is_null()) {
+      return val_;
+    }
     avg_ = sum_ / count_;
     return Value(FLOATS, (char *)&avg_, sizeof(float));
   }

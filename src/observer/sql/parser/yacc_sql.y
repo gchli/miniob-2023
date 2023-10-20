@@ -811,7 +811,7 @@ comp_op:
     | LIKE { $$ = STR_LIKE; }
     | NOT LIKE { $$ = STR_NOT_LIKE; }
     | IS_T { $$ = IS; }
-    | NOT IS_T { $$ = IS_NOT; }
+    | IS_T NOT { $$ = IS_NOT; }
     ;
 
 load_data_stmt:

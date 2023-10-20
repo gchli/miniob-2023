@@ -107,15 +107,32 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     return RC::INTERNAL;
   }
 
+  if (left.is_null() || right.is_null()) {
+    switch (comp_) {
+      case IS: {
+        result = left.is_null() && right.is_null();
+      } break;
+      case IS_NOT: {
+        result = !left.is_null() || !right.is_null(); // de morgran law
+      } break;
+      default:
+        // compare with null is always false
+        result = false;
+      }
+    return rc;
+  }
+
   int cmp_result = left.compare(right);
   result         = false;
   switch (comp_) {
+    case IS: // maybe is is equal?
     case EQUAL_TO: {
       result = (0 == cmp_result);
     } break;
     case LESS_EQUAL: {
       result = (cmp_result <= 0);
     } break;
+    case IS_NOT:
     case NOT_EQUAL: {
       result = (cmp_result != 0);
     } break;
