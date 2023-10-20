@@ -23,12 +23,14 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 
 #include "sql/parser/value.h"
+#include "storage/common/limits.h"
 #include "storage/record/record_manager.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/trx/latch_memo.h"
 #include "sql/parser/parse_defs.h"
 #include "common/lang/comparator.h"
 #include "common/log/log.h"
+#include "storage/common/limits.h"
 
 /**
  * @brief B+树的实现
@@ -63,6 +65,16 @@ public:
 
   int operator()(const char *v1, const char *v2) const
   {
+    bool left_is_null = is_mem_null(static_cast<const void*>(v1), attr_type_, attr_length_);
+    bool right_is_null = is_mem_null(static_cast<const void*>(v2), attr_type_, attr_length_);
+    if (left_is_null && right_is_null) {
+      return 0;
+    } else if (left_is_null) {
+      return 1;
+    } else if (right_is_null) {
+      return -1;
+    }
+
     switch (attr_type_) {
       case INTS: {
         return common::compare_int((void *)v1, (void *)v2);

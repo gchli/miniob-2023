@@ -12,4 +12,4 @@ static constexpr float MINIOB_FLOAT_NULL = std::numeric_limits<float>::lowest();
 static constexpr char MINIOB_CHARS_NULL = std::numeric_limits<char>::lowest();
 
 void set_mem_null(void *dst, AttrType attr_type, size_t attr_len);
-bool is_mem_null(void *dst, AttrType attr_type, size_t attr_len);
+bool is_mem_null(const void *dst, const AttrType attr_type, const size_t attr_len);

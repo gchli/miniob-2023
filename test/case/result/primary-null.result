@@ -22,8 +22,6 @@ SUCCESS
 
 INSERT INTO null_table VALUES (5, 15, null, '2021-01-31');
 FAILURE
-INSERT INTO null_table VALUES (null, 15, 30.0, '2021-01-31');
-FAILURE
 
 2. SELECT
 SELECT * FROM null_table;

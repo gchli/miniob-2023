@@ -17,7 +17,7 @@ void set_mem_null(void *dst, AttrType attr_type, size_t attr_len)
   }
 }
 
-bool is_mem_null(void *dst, AttrType attr_type, size_t attr_len)
+bool is_mem_null(const void *dst, const AttrType attr_type, const size_t attr_len)
 {
   if (attr_type == INTS) {
     int nullval = MINIOB_INT_NULL;
