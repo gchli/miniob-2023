@@ -369,48 +369,46 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
   memcpy(record_data, old_record.data(), record_size);
 
   int col_count = attributes.size();
-  for (int i = 0; i < col_count; i++) {
+  const FieldMeta *field = nullptr;
+
+  for (int i = 0; i < attributes.size(); i++) {
     const std::string &attribute = attributes[i];
-    const Value &value = values[i];
-    bool find = false;
-
-    for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
-      const FieldMeta *field = table_meta_.field(i);
-      // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
-      if (field->type() != value.attr_type()) {
-        if (field->type() == DATES && (strcmp(field->name(), attribute.c_str()) == 0) && value.attr_type() == CHARS) {
-          date_u date;
-
-          if (RC::SUCCESS != str_to_date(value.get_string(), date)) {
-            return RC::INVALID_ARGUMENT;
-          }
-          Value new_date_value(date);
-          memcpy(record_data + field->offset(), new_date_value.data(), field->len());
-        }
-        if (field->nullable() && value.is_null()) {
-          set_mem_null(record_data + field->offset(), field->type(), field->len());
-        }
-        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-      }
-
-      if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
-        size_t copy_len = field->len();
-        if (field->type() == CHARS) {
-          const size_t data_len = value.length();
-          if (copy_len > data_len) {
-            copy_len = data_len + 1;
-          }
-        }
-
-        memcpy(record_data + field->offset(), value.data(), copy_len);
-        find = true;
-      }
-    }
-
-    if (!find) {
+    RC rc = this->get_field_meta_by_name(field, attribute);
+    if (rc != RC::SUCCESS) {
       free(record_data);
       return RC::SCHEMA_FIELD_NOT_EXIST;
     }
+
+    const Value &value = values[i];
+    // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
+    if (field->type() != value.attr_type()) {
+      if (field->type() == DATES && value.attr_type() == CHARS) {
+        date_u date;
+
+        if (RC::SUCCESS != str_to_date(value.get_string(), date)) {
+          return RC::INVALID_ARGUMENT;
+        }
+        Value new_date_value(date);
+        memcpy(record_data + field->offset(), new_date_value.data(), field->len());
+        continue;
+      }
+      if (field->nullable() && value.is_null()) {
+        set_mem_null(record_data + field->offset(), field->type(), field->len());
+      
+      }
+      free(record_data);
+      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+
+    size_t copy_len = field->len();
+    if (field->type() == CHARS) {
+      const size_t data_len = value.length();
+      if (copy_len > data_len) {
+        copy_len = data_len + 1;
+      }
+    }
+
+    memcpy(record_data + field->offset(), value.data(), copy_len);
   }
   new_record.set_data_owner(record_data, record_size);
 
@@ -464,15 +462,16 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     const FieldMeta *field    = table_meta_.field(i + normal_field_start_index);
     const Value     &value    = values[i];
     size_t           copy_len = field->len();
+    // set null before dates
+    if (value.is_null()) {
+      set_mem_null(record_data + field->offset(), field->type(), field->len());
+      continue;
+    }
     if (field->type() == DATES) {
       date_u date;
       RC     ret = str_to_date(value.get_string(), date);
       Value  date_val(date);
       memcpy(record_data + field->offset(), date_val.data(), copy_len);
-      continue;
-    }
-    if (value.is_null()) {
-      set_mem_null(record_data + field->offset(), field->type(), field->len());
       continue;
     }
     if (field->type() == CHARS) {

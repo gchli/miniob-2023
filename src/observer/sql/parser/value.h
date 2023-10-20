@@ -98,5 +98,5 @@ private:
   } num_value_;
   std::string str_value_;
   date_u      date_value_;
-  bool null;
+  bool null = false;
 };

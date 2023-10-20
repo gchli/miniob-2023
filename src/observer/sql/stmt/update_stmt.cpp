@@ -80,7 +80,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
               table_name, field_meta->name(), value.get_string().c_str());
           return RC::INVALID_ARGUMENT;
         }
-      } if (field_meta->nullable() && value.is_null()) {
+      } else if (field_meta->nullable() && value.is_null()) {
         LOG_DEBUG("field convert null to nullable. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_meta->type(), value.attr_type());
       } else {
@@ -89,6 +89,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
         return rc;         
       }
     }
+
     attribute_names.emplace_back(update.update_list[i].attribute_name);
     values.emplace_back(update.update_list[i].value);
   }
