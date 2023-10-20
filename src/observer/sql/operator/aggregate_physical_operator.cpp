@@ -15,7 +15,7 @@ Aggregator::Aggregator(AggregateExpr *expr)
   field_     = expr->get_field();
   attr_type_ = expr->get_field().attr_type();
   val_       = Value();
-  val_.set_type(NULLS);
+  val_.set_null();
 }
 
 Aggregator::Aggregator(shared_ptr<AggregateExpr> expr) : Aggregator(expr.get()) {}
@@ -33,7 +33,7 @@ void Aggregator::add_tuple(Tuple *tuple)
 
   switch (aggr_type_) {
     case MAX_T: {
-      if (val_.attr_type() == NULLS) {
+      if (val_.is_null()) {
         val_ = val;
         break;
       }
@@ -44,7 +44,7 @@ void Aggregator::add_tuple(Tuple *tuple)
       }
     } break;
     case MIN_T: {
-      if (val.attr_type() == NULLS) {
+      if (val_.is_null()) {
         val_ = val;
         break;
       }

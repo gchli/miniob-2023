@@ -67,6 +67,11 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
         }
         continue;
       }
+      if (field_meta->nullable() && values[i].is_null()) {
+        LOG_DEBUG("field is nullable and value is null. table=%s, field=%s, field type=%d, value_type=%d",
+            table_name, field_meta->name(), field_type, value_type);
+        continue;
+      }
       // TODO try to convert the value type to field type
       LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_type, value_type);

@@ -12,7 +12,6 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
-#include <bits/types/FILE.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <string.h>
@@ -37,6 +36,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/index.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
+#include "storage/common/limits.h"
 
 Table::~Table()
 {
@@ -386,9 +386,11 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
           }
           Value new_date_value(date);
           memcpy(record_data + field->offset(), new_date_value.data(), field->len());
-          new_record.set_data_owner(record_data, record_size);
-          return RC::SUCCESS;
         }
+        if (field->nullable() && value.is_null()) {
+          set_mem_null(record_data + field->offset(), field->type(), field->len());
+        }
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
 
       if (field->type() == value.attr_type() && strcmp(field->name(), attribute.c_str()) == 0) {
@@ -428,6 +430,14 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value     &value = values[i];
     if (field->type() != value.attr_type()) {
+      if (value.attr_type() == UNDEFINED && value.is_null()) {
+        if (field->nullable()) {
+          continue;
+        }
+        LOG_ERROR("Insert null attribute into not null field. table name =%s, field name=%s, type=%d",
+                  table_meta_.name(), field->name(), field->type());
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
       if (field->type() == DATES && value.attr_type() == CHARS) {
         // 在创建insert stmt时已进行过检查
         continue;
@@ -459,6 +469,10 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       RC     ret = str_to_date(value.get_string(), date);
       Value  date_val(date);
       memcpy(record_data + field->offset(), date_val.data(), copy_len);
+      continue;
+    }
+    if (value.is_null()) {
+      set_mem_null(record_data + field->offset(), field->type(), field->len());
       continue;
     }
     if (field->type() == CHARS) {

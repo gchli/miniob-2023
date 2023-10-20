@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <sstream>
 #include "common/date.h"
 #include "sql/parser/value.h"
+#include "storage/common/limits.h"
 #include "storage/field/field.h"
 #include "common/log/log.h"
 #include "common/lang/comparator.h"
@@ -50,6 +51,7 @@ Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 Value::Value(date_u date) { set_date(date); }
 void Value::set_data(char *data, int length)
 {
+  null = false;
   switch (attr_type_) {
     case CHARS: {
       set_string(data, length);
@@ -137,6 +139,14 @@ void Value::set_value(const Value &value)
   }
 }
 
+void Value::set_null() {
+  null = true;
+}
+
+bool Value::is_null() const {
+  return null;
+}
+
 const char *Value::data() const
 {
   switch (attr_type_) {
@@ -155,6 +165,10 @@ const char *Value::data() const
 std::string Value::to_string() const
 {
   std::stringstream os;
+  if (is_null()) {
+    os << "NULL";
+    return os.str();
+  }
   switch (attr_type_) {
     case INTS: {
       os << num_value_.int_value_;

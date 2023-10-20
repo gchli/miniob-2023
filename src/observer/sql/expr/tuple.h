@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse.h"
 #include "sql/parser/value.h"
 #include "sql/expr/expression.h"
+#include "storage/common/limits.h"
 #include "storage/record/record.h"
 
 class Table;
@@ -153,6 +154,10 @@ public:
     FieldExpr       *field_expr = speces_[index];
     const FieldMeta *field_meta = field_expr->field().meta();
     cell.set_type(field_meta->type());
+    if (is_mem_null(this->record_->data() + field_meta->offset(), field_meta->type(), field_meta->len())) {
+      cell.set_null();
+      return RC::SUCCESS;
+    }
     cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
     return RC::SUCCESS;
   }
