@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "common/log/log.h"
+#include "sql/parser/value.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/field/field_meta.h"
@@ -71,11 +72,20 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     }
 
     if (field_meta->type() != value.attr_type()) {
-      rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
-      LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
-      return rc; 
+      if (field_meta->type() == AttrType::DATES && value.attr_type() == AttrType::CHARS) {
+        LOG_DEBUG("field type mismatch, convert string to date. table=%s, field=%s, field type=%d, value_type=%d",
+          table_name, field_meta->name(), field_meta->type(), value.attr_type());
+        if (!is_date_valid(value.get_string())) {
+          LOG_WARN("invalid date string. table=%s, field=%s, value=%s",
+              table_name, field_meta->name(), value.get_string().c_str());
+          return RC::INVALID_ARGUMENT;
+        }
+      } else {
+        rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+        return rc;         
+      }
     }
-    
     attribute_names.emplace_back(update.update_list[i].attribute_name);
     values.emplace_back(update.update_list[i].value);
   }

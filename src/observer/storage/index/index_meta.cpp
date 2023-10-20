@@ -86,7 +86,7 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     fields[i] = field;
   }
 
-  if (!unique_value.asBool()) {
+  if (!unique_value.isBool()) {
     LOG_ERROR("unique value not a bool. json value=%s", unique_value.toStyledString().c_str());
     return RC::INTERNAL;
   }
