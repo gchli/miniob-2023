@@ -67,7 +67,7 @@ void Aggregator::add_tuple(Tuple *tuple)
     } break;
     case SUM_T: {
       if (val.is_null()) {
-        // val_ = val;
+        val_ = val;
         break;
       }
       assert(rc == RC::SUCCESS);
@@ -96,6 +96,9 @@ Value Aggregator::get_result()
     return Value(INTS, (char *)&count_, sizeof(int));
   }
   if (aggr_type_ == SUM_T) {
+    if (val_.is_null()) {
+      return val_;
+    }
     return Value(FLOATS, (char *)&sum_, sizeof(float));
   }
   if (aggr_type_ == AVG_T) {
