@@ -123,6 +123,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
   std::vector<Value> *              value_list;
+  std::vector<std::vector<Value>> * insert_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
@@ -163,6 +164,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attribute_list>      id_list
 %type <is_null>             attr_null
 %type <update_list>         update_list
+%type <insert_list>         insert_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -464,19 +466,52 @@ aggr_func:
     ;
 
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE
+    INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_list
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
+      std::vector<Value> first_value;
       if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
+        first_value.swap(*$7);
       }
-      $$->insertion.values.emplace_back(*$6);
-      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
+      first_value.emplace_back(*$6);
+      std::reverse(first_value.begin(), first_value.end());
+
+      if ($9 != nullptr) {
+        $$->insertion.insert_values.swap(*$9);
+      }
+      $$->insertion.insert_values.emplace_back(std::move(first_value));
+      std::reverse($$->insertion.insert_values.begin(), $$->insertion.insert_values.end());
+
       delete $6;
       free($3);
+      delete $9;
+      delete $7;
     }
     ;
+
+insert_list:
+  {
+    $$ = nullptr;
+  }
+  | COMMA LBRACE value value_list RBRACE insert_list
+  {
+    std::vector<Value> first_value;
+    if ($4 != nullptr) {
+      first_value.swap(*$4);
+    } 
+    first_value.emplace_back(*$3);
+    std::reverse(first_value.begin(), first_value.end());
+
+    if ($6 != nullptr) {
+      $$ = $6;
+    } else {
+      $$ = new std::vector<std::vector<Value>>;
+    }
+    $$->emplace_back(std::move(first_value));
+    delete $6;
+  }
+  ;
 
 value_list:
     /* empty */
@@ -530,10 +565,13 @@ update_stmt:      /*  update 语句的语法解析树*/
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.update_list.emplace_back(UpdateListSqlNode{$4, *$6});
+      
       if ($7 != nullptr) {
-        $$->update.update_list.insert($$->update.update_list.end(), $7->begin(), $7->end());
+        $$->update.update_list.swap(*$7);
       }
+      $$->update.update_list.emplace_back(UpdateListSqlNode{$4, *$6});
+      std::reverse($$->update.update_list.begin(), $$->update.update_list.end());
+
       if ($8 != nullptr) {
         $$->update.conditions.swap(*$8);
         delete $8;

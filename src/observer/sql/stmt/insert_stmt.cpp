@@ -20,16 +20,16 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "common/date.h"
 
-InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
-    : table_(table), values_(values), value_amount_(value_amount)
+InsertStmt::InsertStmt(Table *table, const std::vector<Value> *insert_values, int insert_amount)
+    : table_(table), insert_values_(insert_values), insert_amount_(insert_amount)
 {}
 
 RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
 {
   const char *table_name = inserts.relation_name.c_str();
-  if (nullptr == db || nullptr == table_name || inserts.values.empty()) {
+  if (nullptr == db || nullptr == table_name || inserts.insert_values.empty()) {
     LOG_WARN("invalid argument. db=%p, table_name=%p, value_num=%d",
-        db, table_name, static_cast<int>(inserts.values.size()));
+        db, table_name, static_cast<int>(inserts.insert_values.size()));
     return RC::INVALID_ARGUMENT;
   }
 
@@ -40,46 +40,48 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  // check the fields number
-  const Value     *values     = inserts.values.data();
-  const int        value_num  = static_cast<int>(inserts.values.size());
-  const TableMeta &table_meta = table->table_meta();
-  const int        field_num  = table_meta.field_num() - table_meta.sys_field_num();
-  if (field_num != value_num) {
-    LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
-    return RC::SCHEMA_FIELD_MISSING;
-  }
+  for (int i = 0; i < inserts.insert_values.size(); i++) {
+    // check the fields number
+    const Value     *values     = inserts.insert_values[i].data();
+    const int        value_num  = static_cast<int>(inserts.insert_values[i].size());
+    const TableMeta &table_meta = table->table_meta();
+    const int        field_num  = table_meta.field_num() - table_meta.sys_field_num();
+    if (field_num != value_num) {
+      LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
 
-  // check fields type
-  const int sys_field_num = table_meta.sys_field_num();
-  for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
-    const AttrType   field_type = field_meta->type();
-    const AttrType   value_type = values[i].attr_type();
-    if (field_type != value_type) {
-      if (field_type == AttrType::DATES && value_type == AttrType::CHARS) {
-        LOG_DEBUG("field type mismatch, convert string to date. table=%s, field=%s, field type=%d, value_type=%d",
-          table_name, field_meta->name(), field_type, value_type);
-        if (!is_date_valid(values[i].get_string())) {
-          LOG_WARN("invalid date string. table=%s, field=%s, value=%s",
-              table_name, field_meta->name(), values[i].get_string().c_str());
-          return RC::INVALID_ARGUMENT;
-        }
-        continue;
-      }
-      if (field_meta->nullable() && values[i].is_null()) {
-        LOG_DEBUG("field is nullable and value is null. table=%s, field=%s, field type=%d, value_type=%d",
+    // check fields type
+    const int sys_field_num = table_meta.sys_field_num();
+    for (int i = 0; i < value_num; i++) {
+      const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
+      const AttrType   field_type = field_meta->type();
+      const AttrType   value_type = values[i].attr_type();
+      if (field_type != value_type) {
+        if (field_type == AttrType::DATES && value_type == AttrType::CHARS) {
+          LOG_DEBUG("field type mismatch, convert string to date. table=%s, field=%s, field type=%d, value_type=%d",
             table_name, field_meta->name(), field_type, value_type);
-        continue;
+          if (!is_date_valid(values[i].get_string())) {
+            LOG_WARN("invalid date string. table=%s, field=%s, value=%s",
+                table_name, field_meta->name(), values[i].get_string().c_str());
+            return RC::INVALID_ARGUMENT;
+          }
+          continue;
+        }
+        if (field_meta->nullable() && values[i].is_null()) {
+          LOG_DEBUG("field is nullable and value is null. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          continue;
+        }
+        // TODO try to convert the value type to field type
+        LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+            table_name, field_meta->name(), field_type, value_type);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
-      // TODO try to convert the value type to field type
-      LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
-          table_name, field_meta->name(), field_type, value_type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
     }
   }
 
   // everything alright
-  stmt = new InsertStmt(table, values, value_num);
+  stmt = new InsertStmt(table, inserts.insert_values.data(), inserts.insert_values.size());
   return RC::SUCCESS;
 }
