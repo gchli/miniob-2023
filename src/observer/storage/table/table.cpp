@@ -394,7 +394,7 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
       }
       if (field->nullable() && value.is_null()) {
         set_mem_null(record_data + field->offset(), field->type(), field->len());
-      
+        continue; 
       }
       free(record_data);
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
