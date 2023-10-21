@@ -14,8 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/join_physical_operator.h"
 #include "common/rc.h"
+#include "sql/expr/tuple.h"
 #include "sql/parser/value.h"
+#include "sql/stmt/filter_stmt.h"
 #include <cstddef>
+#include <memory>
+#include <vector>
 
 NestedLoopJoinPhysicalOperator::NestedLoopJoinPhysicalOperator() {}
 
@@ -30,185 +34,48 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
   left_         = children_[0].get();
   right_        = children_[1].get();
   right_closed_ = true;
-  round_done_   = true;
 
-  rc   = left_->open(trx);
-  trx_ = trx;
-
-  while (rc == RC::SUCCESS) {
-
-    bool left_need_step = (left_tuple_ == nullptr);
-
-    if (round_done_) {
-      left_need_step = true;
-    }
-
-    if (left_need_step) {
-      rc = left_next();
-      if (rc != RC::SUCCESS) {
-        break;
-      }
-      rc = right_next();
-      if (rc != RC::SUCCESS) {
-        if (rc == RC::RECORD_EOF) {
-          left_need_step = true;
-        } else {
-          break;
-        }
-      }
-    } else {
-      rc = right_next();
-      if (rc != RC::SUCCESS) {
-        if (rc == RC::RECORD_EOF) {
-          left_need_step = true;
-        } else {
-          break;
-        }
-        if (left_need_step) {
-          rc = left_next();
-          if (rc != RC::SUCCESS) {
-            break;
-          }
-        }
-        rc = right_next();
-      }
-    }
-    // if (round_done_) {
-    //   left_need_step = true;
-    // } else {
-    //   rc = right_next();
-    //   if (rc != RC::SUCCESS) {
-    //     if (rc == RC::RECORD_EOF) {
-    //       left_need_step = true;
-    //     } else {
-    //       break;
-    //     }
-    //   } else {
-    //     if (join_stmt_ == nullptr) {
-    //       joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
-    //       continue;
-    //     }
-    //   }
-    // }
-
-    // if (left_need_step) {
-    //   rc = left_next();
-    //   if (rc != RC::SUCCESS) {
-    //     break;
-    //   }
-    // }
-
-    // rc = right_next();
-    // 存在空表
-    if (joined_tuple_.get_left() == nullptr || joined_tuple_.get_right() == nullptr) {
-      break;
-    }
-
-    if (join_stmt_ == nullptr) {
-      joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
-      continue;
-    }
-
-    bool        filter_stmt_result = true;
-    const auto &filter             = join_stmt_->get_filter();
-    if (filter != nullptr) {
-      for (const auto &filter_unit : filter->filter_units()) {
-        auto  left_filer_obj  = filter_unit->left();
-        auto  right_filer_obj = filter_unit->right();
-        Value left_value, right_value;
-        if (left_filer_obj.is_attr) {
-          TupleCellSpec left_spec(left_filer_obj.field.table_name(), left_filer_obj.field.field_name());
-          joined_tuple_.find_cell(left_spec, left_value);
-        } else {
-          left_value = left_filer_obj.value;
-        }
-        if (right_filer_obj.is_attr) {
-          TupleCellSpec right_spec(right_filer_obj.field.table_name(), right_filer_obj.field.field_name());
-          joined_tuple_.find_cell(right_spec, right_value);
-        } else {
-          right_value = right_filer_obj.value;
-        }
-        auto      comp_type     = filter_unit->comp();
-        const int comp_result   = left_value.compare(right_value);
-        bool      filter_result = false;
-        switch (comp_type) {
-          case EQUAL_TO: {
-            filter_result = (0 == comp_result);
-          } break;
-          case LESS_EQUAL: {
-            filter_result = (comp_result <= 0);
-          } break;
-          case NOT_EQUAL: {
-            filter_result = (comp_result != 0);
-          } break;
-          case LESS_THAN: {
-            filter_result = (comp_result < 0);
-          } break;
-          case GREAT_EQUAL: {
-            filter_result = (comp_result >= 0);
-          } break;
-          case GREAT_THAN: {
-            filter_result = (comp_result > 0);
-          } break;
-          default: {
-            LOG_WARN("invalid compare type: %d", comp_type);
-          } break;
-        }
-        filter_stmt_result = filter_stmt_result && filter_result;
-        if (!filter_stmt_result) {
-          break;
-        }
-      }
-      if (filter_stmt_result) {
-        // if (joined_tuple_.get_left() != nullptr && joined_tuple_.get_right() != nullptr) {
-        joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
-        // }
-        continue;
-      }
-    }
+  rc = left_->open(trx);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open left oper. rc=%s", strrc(rc));
+    return rc;
   }
 
-  return rc == RC::RECORD_EOF ? RC::SUCCESS : rc;
+  rc = right_->open(trx);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open right oper. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  get_all_tuples(left_, left_tuples_);
+  get_all_tuples(right_, right_tuples_);
+
+  trx_ = trx;
+
+  return rc;
 }
 
 RC NestedLoopJoinPhysicalOperator::next()
 {
-  // if (left_tuple_ == nullptr || right_tuple_ == nullptr) {
-  //   return RC::RECORD_EOF;
-  // }
-  if (joined_tuples_.empty()) {
+  if (left_tuples_.empty() || right_tuples_.empty()) {
     return RC::RECORD_EOF;
   }
-  if (cur_index_ == joined_tuples_.size()) {
-    return RC::RECORD_EOF;
+  while (get_next_joined_tuple()) {
+    if (join_stmt_ == nullptr) {
+      return RC::SUCCESS;
+    }
+
+    const auto &filter = join_stmt_->get_filter();
+    if (filter == nullptr) {
+      return RC::SUCCESS;
+    }
+
+    bool filter_result = is_tuple_valid(filter);
+    if (filter_result) {
+      return RC::SUCCESS;
+    }
   }
-  return RC::SUCCESS;
-  // bool left_need_step = (left_tuple_ == nullptr);
-  // RC   rc             = RC::SUCCESS;
-  // if (round_done_) {
-  //   left_need_step = true;
-  // } else {
-  //   rc = right_next();
-  //   if (rc != RC::SUCCESS) {
-  //     if (rc == RC::RECORD_EOF) {
-  //       left_need_step = true;
-  //     } else {
-  //       return rc;
-  //     }
-  //   } else {
-  //     return rc;  // got one tuple from right
-  //   }
-  // }
-
-  // if (left_need_step) {
-  //   rc = left_next();
-  //   if (rc != RC::SUCCESS) {
-  //     return rc;
-  //   }
-  // }
-
-  // rc = right_next();
-  // return rc;
+  return RC::RECORD_EOF;
 }
 
 RC NestedLoopJoinPhysicalOperator::close()
@@ -229,60 +96,83 @@ RC NestedLoopJoinPhysicalOperator::close()
   return rc;
 }
 
-Tuple *NestedLoopJoinPhysicalOperator::current_tuple()
+Tuple *NestedLoopJoinPhysicalOperator::current_tuple() { return &joined_tuple_; }
+
+bool NestedLoopJoinPhysicalOperator::is_tuple_valid(const shared_ptr<FilterStmt> &filter)
 {
-  // return &joined_tuple_;
-  // empty table join
-  assert(!joined_tuples_.empty());
-  assert(cur_index_ < joined_tuples_.size());
-  return &joined_tuples_[cur_index_++];
+  bool filter_stmt_result = true;
+  for (const auto &filter_unit : filter->filter_units()) {
+    auto  left_filer_obj  = filter_unit->left();
+    auto  right_filer_obj = filter_unit->right();
+    Value left_value, right_value;
+    if (left_filer_obj.is_attr) {
+      TupleCellSpec left_spec(left_filer_obj.field.table_name(), left_filer_obj.field.field_name());
+      joined_tuple_.find_cell(left_spec, left_value);
+    } else {
+      left_value = left_filer_obj.value;
+    }
+    if (right_filer_obj.is_attr) {
+      TupleCellSpec right_spec(right_filer_obj.field.table_name(), right_filer_obj.field.field_name());
+      joined_tuple_.find_cell(right_spec, right_value);
+    } else {
+      right_value = right_filer_obj.value;
+    }
+    auto      comp_type     = filter_unit->comp();
+    const int comp_result   = left_value.compare(right_value);
+    bool      filter_result = false;
+    switch (comp_type) {
+      case EQUAL_TO: {
+        filter_result = (0 == comp_result);
+      } break;
+      case LESS_EQUAL: {
+        filter_result = (comp_result <= 0);
+      } break;
+      case NOT_EQUAL: {
+        filter_result = (comp_result != 0);
+      } break;
+      case LESS_THAN: {
+        filter_result = (comp_result < 0);
+      } break;
+      case GREAT_EQUAL: {
+        filter_result = (comp_result >= 0);
+      } break;
+      case GREAT_THAN: {
+        filter_result = (comp_result > 0);
+      } break;
+      default: {
+        LOG_WARN("invalid compare type: %d", comp_type);
+      } break;
+    }
+    filter_stmt_result = filter_stmt_result && filter_result;
+    if (!filter_stmt_result) {
+      break;
+    }
+  }
+  return filter_stmt_result;
 }
 
-RC NestedLoopJoinPhysicalOperator::left_next()
+bool NestedLoopJoinPhysicalOperator::get_next_joined_tuple()
 {
-  RC rc = RC::SUCCESS;
-  rc    = left_->next();
-  if (rc != RC::SUCCESS) {
-    return rc;
+  if (right_tuples_.empty() || left_tuples_.empty()) {
+    return false;
   }
-
-  left_tuple_ = left_->current_tuple()->copy();
-  joined_tuple_.set_left(left_tuple_);
-  // joined_tuple_.set_left(left_->current_tuple());
-  return rc;
+  if (right_index_ == right_tuples_.size() && left_index_ == left_tuples_.size() - 1) {
+    return false;
+  }
+  if (right_index_ == right_tuples_.size()) {
+    right_index_ = 0;
+    left_index_++;
+  }
+  joined_tuple_.set_left(left_tuples_[left_index_]);
+  joined_tuple_.set_right(right_tuples_[right_index_++]);
+  return true;
 }
 
-RC NestedLoopJoinPhysicalOperator::right_next()
+RC NestedLoopJoinPhysicalOperator::get_all_tuples(PhysicalOperator *oper, vector<Tuple *> &tuples)
 {
   RC rc = RC::SUCCESS;
-  if (round_done_) {
-    if (!right_closed_) {
-      rc            = right_->close();
-      right_closed_ = true;
-      if (rc != RC::SUCCESS) {
-        return rc;
-      }
-    }
-
-    rc = right_->open(trx_);
-    if (rc != RC::SUCCESS) {
-      return rc;
-    }
-    right_closed_ = false;
-
-    round_done_ = false;
+  while (RC::SUCCESS == (rc = oper->next())) {
+    tuples.push_back(oper->current_tuple()->copy());
   }
-
-  rc = right_->next();
-  if (rc != RC::SUCCESS) {
-    if (rc == RC::RECORD_EOF) {
-      round_done_ = true;
-    }
-    return rc;
-  }
-
-  right_tuple_ = right_->current_tuple()->copy();
-  // joined_tuple_.set_right(right_->current_tuple());
-  joined_tuple_.set_right(right_tuple_);
   return rc;
 }

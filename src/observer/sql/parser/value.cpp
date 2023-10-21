@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <sstream>
 #include "common/date.h"
+#include "common/rc.h"
 #include "sql/parser/value.h"
 #include "storage/field/field.h"
 #include "common/log/log.h"
@@ -204,20 +205,64 @@ int Value::compare(const Value &other) const
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
     }
-  } else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
-    float this_data = this->num_value_.int_value_;
-    return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
-  } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
-    float other_data = other.num_value_.int_value_;
-    return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
   }
-  LOG_WARN("not supported");
+  // compare different types
+  if (this->attr_type_ == INTS) {
+    float this_data = this->num_value_.int_value_;
+    if (other.attr_type_ == FLOATS) {
+      return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
+    }
+    if (other.attr_type_ == CHARS) {
+      float other_data = std::atof(other.data());
+      return common::compare_float((void *)&this_data, (void *)&other_data);
+    }
+  } else if (this->attr_type_ == FLOATS) {
+    if (other.attr_type_ == INTS) {
+      float other_data = other.num_value_.int_value_;
+      return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+    }
+    if (other.attr_type_ == CHARS) {
+      float other_data = std::atof(other.data());
+      return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+    }
+  } else if (this->attr_type_ == CHARS) {
+    float this_data = std::atof(this->data());
+    if (other.attr_type_ == INTS) {
+      float other_data = other.num_value_.int_value_;
+      return common::compare_float((void *)&this_data, (void *)&other_data);
+    } else if (other.attr_type_ == FLOATS) {
+      return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
+    } else if (other.attr_type() == DATES) {
+      date_u this_data;
+      auto   rc = str_to_date(this->data(), this_data);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to convert string to date. s=%s", this->data());
+        return -1;
+      }
+      return common::compare_date((void *)&this_data, (void *)&other.date_value_);
+    }
+  } else if (this->attr_type_ == DATES) {
+    if (other.attr_type() == CHARS) {
+      date_u this_data = this->date_value_;
+      date_u other_data;
+      auto   rc = str_to_date(other.data(), other_data);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to convert string to date. s=%s", other.data());
+        return -1;
+      }
+      return common::compare_date((void *)&this_data, (void *)&other_data);
+    } else if (other.attr_type() == INTS) {
+      return common::compare_int((void *)&this->date_value_, (void *)&other.num_value_.int_value_);
+    } else if (other.attr_type() == FLOATS) {
+      int other_data = other.num_value_.float_value_;
+      return common::compare_int((void *)&this->date_value_, (void *)&other_data);
+    }
+  }
+  LOG_ERROR("Invalid data compare.");
   return -1;  // TODO return rc?
 }
 
-bool Value::compare_like(const Value &other) const {
-  return common::compare_string_like(str_value_, other.str_value_);
-}
+bool Value::compare_like(const Value &other) const { return common::compare_string_like(str_value_, other.str_value_); }
 
 int Value::get_int() const
 {

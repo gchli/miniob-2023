@@ -46,16 +46,19 @@ private:
   RC right_next();  //! 右表遍历下一条数据，如果上一轮结束了就重新开始新的一轮
 
 private:
+  RC   get_all_tuples(PhysicalOperator *oper, vector<Tuple *> &tuples);
+  bool get_next_joined_tuple();
+  bool is_tuple_valid(const shared_ptr<FilterStmt> &filter);
   Trx *trx_ = nullptr;
 
   //! 左表右表的真实对象是在PhysicalOperator::children_中，这里是为了写的时候更简单
-  PhysicalOperator    *left_        = nullptr;
-  PhysicalOperator    *right_       = nullptr;
-  Tuple               *left_tuple_  = nullptr;
-  Tuple               *right_tuple_ = nullptr;
-  JoinedTuple          joined_tuple_;  //! 当前关联的左右两个tuple
-  vector<JoinedTuple>  joined_tuples_;
-  bool                 round_done_   = true;  //! 右表遍历的一轮是否结束
+  PhysicalOperator    *left_  = nullptr;
+  PhysicalOperator    *right_ = nullptr;
+  vector<Tuple *>      left_tuples_;
+  vector<Tuple *>      right_tuples_;
+  int                  left_index_{0};
+  int                  right_index_{0};
+  JoinedTuple          joined_tuple_;         //! 当前关联的左右两个tuple
   bool                 right_closed_ = true;  //! 右表算子是否已经关闭
   shared_ptr<JoinStmt> join_stmt_{nullptr};
   int                  cur_index_{0};
