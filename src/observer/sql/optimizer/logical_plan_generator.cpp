@@ -37,6 +37,9 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/update_stmt.h"
+#include "storage/field/field.h"
+#include "storage/table/table.h"
+#include <cassert>
 #include <memory>
 #include <vector>
 
@@ -95,14 +98,16 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   const std::vector<Table *> &tables = select_stmt->tables();
   // const std::vector<Field> &all_fields = select_stmt->query_fields();
   const auto &all_exprs = select_stmt->query_exprs();
-  bool        has_aggr  = false;
-  auto        iter      = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
+
+  // todo(ligch): 应该结合是否有group by进行判断，放在之后进行优化
+  bool has_aggr = false;
+  auto iter     = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
     return expr->type() == ExprType::AGGREGATE;
   });
   if (iter != all_exprs.end()) {
     has_aggr = true;
   }
-  // todo(ligch): 应该结合是否有group by进行判断，放在之后进行优化
+
   iter = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
     return expr->type() != ExprType::AGGREGATE;
   });
@@ -111,22 +116,56 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     return RC::INVALID_ARGUMENT;
   }
 
-  for (Table *table : tables) {
-    std::vector<Field> fields;
-    for (const auto &expr : all_exprs) {
-      // todo(ligch): add exprtype::func
-      if (expr->type() == ExprType::FIELD || expr->type() == ExprType::AGGREGATE) {
-        const char *table_name = expr->table_name();
-        if (0 == strcmp(table_name, table->name())) {
-          fields.push_back(expr->get_field());
+  const auto &join_exprs = select_stmt->join_stmts();
+  bool        has_join   = select_stmt->join_stmts().size() > 0;
+  // select t1.a, t2.b, t3.c from t1, t2 inner join t3 on t2.b = t3.c; 形如此还未实现。
+  // 是否加一个join tables 的vector？
+  // if (has_join && select_stmt->tables().size() > 1) {
+  //   LOG_WARN("haven't implemented yet.");
+  //   return RC::UNIMPLENMENT;
+  // }
+  //
+  if (!has_join) {
+    for (Table *table : tables) {
+      std::vector<Field> fields;
+      for (const auto &expr : all_exprs) {
+        // todo(ligch): add exprtype::func
+        if (expr->type() == ExprType::FIELD || expr->type() == ExprType::AGGREGATE) {
+          const char *table_name = expr->table_name();
+          if (0 == strcmp(table_name, table->name())) {
+            fields.push_back(expr->get_field());
+          }
         }
       }
+      unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, true /*readonly*/));
+      if (table_oper == nullptr) {
+        table_oper = std::move(table_get_oper);
+      } else {
+        JoinLogicalOperator *join_oper = new JoinLogicalOperator;
+        join_oper->add_child(std::move(table_oper));
+        join_oper->add_child(std::move(table_get_oper));
+        table_oper = unique_ptr<LogicalOperator>(join_oper);
+      }
     }
-    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, true /*readonly*/));
-    if (table_oper == nullptr) {
-      table_oper = std::move(table_get_oper);
-    } else {
-      JoinLogicalOperator *join_oper = new JoinLogicalOperator;
+  } else {
+    // assert(tables.size() == 1);
+    Table *cur_table = tables[0];
+
+    auto get_table_fields = [](Table *table) -> std::vector<Field> {
+      std::vector<Field> ret;
+      for (int i = table->table_meta().sys_field_num(); i < table->table_meta().field_num(); i++) {
+        ret.emplace_back(table, table->table_meta().field(i));
+      }
+      return ret;
+    };
+    std::vector<Field> fields = get_table_fields(cur_table);
+    table_oper = unique_ptr<LogicalOperator>(new TableGetLogicalOperator(cur_table, fields, true /*readonly*/));
+
+    for (const auto &join_stmt : select_stmt->join_stmts()) {
+      cur_table = join_stmt->get_table();
+      fields    = get_table_fields(cur_table);
+      unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(cur_table, fields, true /*readonly*/));
+      JoinLogicalOperator        *join_oper = new JoinLogicalOperator(join_stmt);
       join_oper->add_child(std::move(table_oper));
       join_oper->add_child(std::move(table_get_oper));
       table_oper = unique_ptr<LogicalOperator>(join_oper);
@@ -140,34 +179,54 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     return rc;
   }
   // todo(ligch): 可以简化逻辑
+  unique_ptr<LogicalOperator> logical_oper;
   if (!has_aggr) {
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_exprs));
-    if (predicate_oper) {
-      if (table_oper) {
-        predicate_oper->add_child(std::move(table_oper));
-      }
-      project_oper->add_child(std::move(predicate_oper));
-    } else {
-      if (table_oper) {
-        project_oper->add_child(std::move(table_oper));
-      }
-    }
-
-    logical_operator.swap(project_oper);
+    logical_oper = std::move(make_unique<ProjectLogicalOperator>(all_exprs));
   } else {
-    unique_ptr<LogicalOperator> aggregate_oper(new AggregateLogicalOperator(all_exprs));
-    if (predicate_oper) {
-      if (table_oper) {
-        predicate_oper->add_child(std::move(table_oper));
-      }
-      aggregate_oper->add_child(std::move(predicate_oper));
-    } else {
-      if (table_oper) {
-        aggregate_oper->add_child(std::move(table_oper));
-      }
-    }
-    logical_operator.swap(aggregate_oper);
+    logical_oper = std::move(make_unique<AggregateLogicalOperator>(all_exprs));
   }
+
+  if (predicate_oper) {
+    if (table_oper) {
+      predicate_oper->add_child(std::move(table_oper));
+    }
+    logical_oper->add_child(std::move(predicate_oper));
+  } else {
+    if (table_oper) {
+      logical_oper->add_child(std::move(table_oper));
+    }
+  }
+
+  logical_operator.swap(logical_oper);
+
+  // if (!has_aggr) {
+  //   unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_exprs));
+  //   if (predicate_oper) {
+  //     if (table_oper) {
+  //       predicate_oper->add_child(std::move(table_oper));
+  //     }
+  //     project_oper->add_child(std::move(predicate_oper));
+  //   } else {
+  //     if (table_oper) {
+  //       project_oper->add_child(std::move(table_oper));
+  //     }
+  //   }
+
+  //   logical_operator.swap(project_oper);
+  // } else {
+  //   unique_ptr<LogicalOperator> aggregate_oper(new AggregateLogicalOperator(all_exprs));
+  //   if (predicate_oper) {
+  //     if (table_oper) {
+  //       predicate_oper->add_child(std::move(table_oper));
+  //     }
+  //     aggregate_oper->add_child(std::move(predicate_oper));
+  //   } else {
+  //     if (table_oper) {
+  //       aggregate_oper->add_child(std::move(table_oper));
+  //     }
+  //   }
+  //   logical_operator.swap(aggregate_oper);
+  // }
   return RC::SUCCESS;
 }
 

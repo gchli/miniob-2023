@@ -125,6 +125,10 @@ LIKE                                    RETURN_TOKEN(LIKE);
 UNIQUE                                  RETURN_TOKEN(UNIQUE);
 NULL                                    RETURN_TOKEN(NULL_T);
 IS                                      RETURN_TOKEN(IS_T);
+INNER                                   RETURN_TOKEN(INNER);
+JOIN                                    RETURN_TOKEN(JOIN);
+
+
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

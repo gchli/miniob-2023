@@ -31,10 +31,7 @@ public:
 
   virtual ~PredicatePhysicalOperator() = default;
 
-  PhysicalOperatorType type() const override
-  {
-    return PhysicalOperatorType::PREDICATE;
-  }
+  PhysicalOperatorType type() const override { return PhysicalOperatorType::PREDICATE; }
 
   RC open(Trx *trx) override;
   RC next() override;
@@ -43,5 +40,7 @@ public:
   Tuple *current_tuple() override;
 
 private:
+  ProjectTuple               *proj_tuple_;
+  Tuple                      *current_tuple_;
   std::unique_ptr<Expression> expression_;
 };

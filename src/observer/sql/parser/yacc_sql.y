@@ -86,6 +86,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -108,6 +109,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         UNIQUE
         NULL_T
         IS_T
+        INNER
+        JOIN
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -115,6 +118,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   ConditionSqlNode *                condition;
   Value *                           value;
   enum CompOp                       comp;
+  enum CondOp                       join_op;
   enum AggrType                     aggr_t;
   RelAttrSqlNode *                  aggr_func;
   RelAttrSqlNode *                  rel_attr;
@@ -129,6 +133,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::string> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
+  InnerJoinSqlNode *                inner_join;
+  std::vector<InnerJoinSqlNode> *   inner_join_list;
   char *                            string;
   int                               number;
   float                             floats;
@@ -150,12 +156,15 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
+/* %type <join_op>             join_op */
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
+%type <condition>           join_condition
+%type <condition_list>      join_condition_list
 %type <rel_attr_list>       select_attr
 %type <relation_list>       rel_list
 %type <rel_attr_list>       attr_list
@@ -165,6 +174,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <is_null>             attr_null
 %type <update_list>         update_list
 %type <insert_list>         insert_list
+%type <inner_join>          inner_join
+%type <inner_join_list>     inner_join_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -599,7 +610,7 @@ update_list:
     ;
 
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where
+    /* SELECT select_attr FROM ID rel_list where
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -618,6 +629,33 @@ select_stmt:        /*  select 语句的语法解析树*/
         delete $6;
       }
       free($4);
+    }*/
+    //join_list 后有可能出现rel_list吗？
+    SELECT select_attr FROM ID rel_list inner_join_list where
+    {
+      $$ = new ParsedSqlNode(SCF_SELECT);
+      if ($2 != nullptr) {
+        $$->selection.attributes.swap(*$2);
+        delete $2;
+      }
+      if ($5 != nullptr) {
+        $$->selection.relations.swap(*$5);
+        delete $5;
+      }
+      $$->selection.relations.push_back($4);
+      std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+
+      if ($6 != nullptr) {
+        $$->selection.joins.swap(*$6);
+        std::reverse($$->selection.joins.begin(), $$->selection.joins.end());
+        delete $6;
+      }
+
+      if ($7 != nullptr) {
+        $$->selection.conditions.swap(*$7);
+        delete$7;
+      }
+      free($4);
     }
     ;
 calc_stmt:
@@ -629,6 +667,7 @@ calc_stmt:
       delete $2;
     }
     ;
+
 
 expression_list:
     expression
@@ -772,12 +811,68 @@ where:
       $$ = $2;
     }
     ;
+
+inner_join_list:
+    {
+      $$ = nullptr;
+    }
+    /* | inner_join
+    {
+      $$ = new std::vector<InnerJoinSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    } */
+    | inner_join inner_join_list {
+      if ($2 != nullptr) {
+        $$ = $2;
+      } else {
+        $$ = new std::vector<InnerJoinSqlNode>;
+      }
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    ;
+
+inner_join:
+    INNER JOIN ID ON join_condition_list {
+      $$ = new InnerJoinSqlNode;
+      $$->relation_name = $3;
+      $$->join_conditions.swap(*$5);
+      delete $5;
+    };
+
+// 实现了expr之后需要扩展
+join_condition:
+    condition
+    {
+      $$ = $1;
+    };
+
+// 目前只支持AND且与condition_list相同
+join_condition_list:
+    {
+      $$ = nullptr;
+    }
+    | join_condition
+    {
+      $$ = new std::vector<ConditionSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | join_condition AND join_condition_list {
+      $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    ;
+
 condition_list:
     /* empty */
     {
       $$ = nullptr;
     }
-    | condition {
+    | condition
+    {
       $$ = new std::vector<ConditionSqlNode>;
       $$->emplace_back(*$1);
       delete $1;
@@ -788,6 +883,7 @@ condition_list:
       delete $1;
     }
     ;
+
 condition:
     rel_attr comp_op value
     {

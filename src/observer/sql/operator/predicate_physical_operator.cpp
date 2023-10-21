@@ -35,7 +35,7 @@ RC PredicatePhysicalOperator::open(Trx *trx)
 
 RC PredicatePhysicalOperator::next()
 {
-  RC rc = RC::SUCCESS;
+  RC                rc   = RC::SUCCESS;
   PhysicalOperator *oper = children_.front().get();
 
   while (RC::SUCCESS == (rc = oper->next())) {
@@ -53,6 +53,7 @@ RC PredicatePhysicalOperator::next()
     }
 
     if (value.get_boolean()) {
+      current_tuple_ = tuple;
       return rc;
     }
   }
@@ -67,5 +68,6 @@ RC PredicatePhysicalOperator::close()
 
 Tuple *PredicatePhysicalOperator::current_tuple()
 {
-  return children_[0]->current_tuple();
+  return current_tuple_;
+  // return children_[0]->current_tuple();
 }

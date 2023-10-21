@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/expr/expression.h"
+#include "sql/stmt/join_stmt.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 
@@ -46,11 +47,13 @@ public:
   const std::vector<Table *> &tables() const { return tables_; }
   // const std::vector<Field>                  &query_fields() const { return query_fields_; }
   const std::vector<shared_ptr<Expression>> &query_exprs() { return query_exprs_; }
+  const std::vector<shared_ptr<JoinStmt>>   &join_stmts() const { return join_stmts_; }
   FilterStmt                                *filter_stmt() const { return filter_stmt_; }
 
 private:
   std::vector<shared_ptr<Expression>> query_exprs_;  // try to convert from query_fields to query_exprs
   // std::vector<Field>                  query_fields_;
-  std::vector<Table *> tables_;
-  FilterStmt          *filter_stmt_ = nullptr;
+  std::vector<Table *>              tables_;
+  FilterStmt                       *filter_stmt_ = nullptr;
+  std::vector<shared_ptr<JoinStmt>> join_stmts_;
 };
