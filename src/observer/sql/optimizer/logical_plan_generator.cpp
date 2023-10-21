@@ -119,10 +119,11 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   const auto &join_exprs = select_stmt->join_stmts();
   bool        has_join   = select_stmt->join_stmts().size() > 0;
   // select t1.a, t2.b, t3.c from t1, t2 inner join t3 on t2.b = t3.c; 形如此还未实现。
-  if (has_join && select_stmt->tables().size() > 1) {
-    LOG_WARN("haven't implemented yet.");
-    return RC::UNIMPLENMENT;
-  }
+  // 是否加一个join tables 的vector？
+  // if (has_join && select_stmt->tables().size() > 1) {
+  //   LOG_WARN("haven't implemented yet.");
+  //   return RC::UNIMPLENMENT;
+  // }
   //
   if (!has_join) {
     for (Table *table : tables) {
@@ -147,7 +148,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       }
     }
   } else {
-    assert(tables.size() == 1);
+    // assert(tables.size() == 1);
     Table *cur_table = tables[0];
 
     auto get_table_fields = [](Table *table) -> std::vector<Field> {
@@ -157,8 +158,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       }
       return ret;
     };
-    std::vector<Field>          fields = get_table_fields(cur_table);
-    unique_ptr<LogicalOperator> table_oper(new TableGetLogicalOperator(cur_table, fields, true /*readonly*/));
+    std::vector<Field> fields = get_table_fields(cur_table);
+    table_oper = unique_ptr<LogicalOperator>(new TableGetLogicalOperator(cur_table, fields, true /*readonly*/));
 
     for (const auto &join_stmt : select_stmt->join_stmts()) {
       cur_table = join_stmt->get_table();

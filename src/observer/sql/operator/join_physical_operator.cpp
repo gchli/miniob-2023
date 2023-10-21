@@ -99,11 +99,13 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
     // }
 
     // rc = right_next();
+    // 存在空表
+    if (joined_tuple_.get_left() == nullptr || joined_tuple_.get_right() == nullptr) {
+      break;
+    }
 
     if (join_stmt_ == nullptr) {
-      if (joined_tuple_.get_left() != nullptr && joined_tuple_.get_right() != nullptr) {
-        joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
-      }
+      joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
       continue;
     }
 
@@ -129,7 +131,7 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
         auto      comp_type     = filter_unit->comp();
         const int comp_result   = left_value.compare(right_value);
         bool      filter_result = false;
-        switch (comp_result) {
+        switch (comp_type) {
           case EQUAL_TO: {
             filter_result = (0 == comp_result);
           } break;
@@ -158,9 +160,9 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
         }
       }
       if (filter_stmt_result) {
-        if (joined_tuple_.get_left() != nullptr && joined_tuple_.get_right() != nullptr) {
-          joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
-        }
+        // if (joined_tuple_.get_left() != nullptr && joined_tuple_.get_right() != nullptr) {
+        joined_tuples_.push_back(JoinedTuple(joined_tuple_.get_left(), joined_tuple_.get_right()));
+        // }
         continue;
       }
     }

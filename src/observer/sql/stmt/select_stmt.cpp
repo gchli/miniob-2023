@@ -123,6 +123,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       }
       table_map.insert(std::pair<std::string, Table *>(table_name, join_table));
       auto join_stmt = make_shared<JoinStmt>(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
+      join_stmts.push_back(join_stmt);
+      // join_stmts.emplace_back(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
     }
   }
 
