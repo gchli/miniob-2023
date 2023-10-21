@@ -81,31 +81,34 @@ extern int yydebug;
     FROM = 287,
     WHERE = 288,
     AND = 289,
-    SET = 290,
-    ON = 291,
-    LOAD = 292,
-    DATA = 293,
-    INFILE = 294,
-    EXPLAIN = 295,
-    EQ = 296,
-    LT = 297,
-    GT = 298,
-    LE = 299,
-    GE = 300,
-    NE = 301,
-    MAX = 302,
-    MIN = 303,
-    AVG = 304,
-    SUM = 305,
-    COUNT = 306,
-    LIKE = 307,
-    NOT = 308,
-    UNIQUE = 309,
-    NUMBER = 310,
-    FLOAT = 311,
-    ID = 312,
-    SSS = 313,
-    UMINUS = 314
+    OR = 290,
+    SET = 291,
+    ON = 292,
+    LOAD = 293,
+    DATA = 294,
+    INFILE = 295,
+    EXPLAIN = 296,
+    EQ = 297,
+    LT = 298,
+    GT = 299,
+    LE = 300,
+    GE = 301,
+    NE = 302,
+    MAX = 303,
+    MIN = 304,
+    AVG = 305,
+    SUM = 306,
+    COUNT = 307,
+    LIKE = 308,
+    NOT = 309,
+    UNIQUE = 310,
+    INNER = 311,
+    JOIN = 312,
+    NUMBER = 313,
+    FLOAT = 314,
+    ID = 315,
+    SSS = 316,
+    UMINUS = 317
   };
 #endif
 
@@ -113,12 +116,13 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 111 "yacc_sql.y"
+#line 114 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
   Value *                           value;
   enum CompOp                       comp;
+  enum CondOp                       join_op;
   enum AggrType                     aggr_t;
   RelAttrSqlNode *                  aggr_func;
   RelAttrSqlNode *                  rel_attr;
@@ -132,11 +136,13 @@ union YYSTYPE
   std::vector<std::string> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
+  InnerJoinSqlNode *                inner_join;
+  std::vector<InnerJoinSqlNode> *   inner_join_list;
   char *                            string;
   int                               number;
   float                             floats;
 
-#line 140 "yacc_sql.hpp"
+#line 146 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

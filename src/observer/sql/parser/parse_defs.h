@@ -59,17 +59,22 @@ struct RelAttrSqlNode
  */
 enum CompOp
 {
-  EQUAL_TO,     ///< "="
-  LESS_EQUAL,   ///< "<="
-  NOT_EQUAL,    ///< "<>"
-  LESS_THAN,    ///< "<"
-  GREAT_EQUAL,  ///< ">="
-  GREAT_THAN,   ///< ">"
-  STR_LIKE,     ///< "LIKE"
-  STR_NOT_LIKE, ///< "NOT LIKE"
+  EQUAL_TO,      ///< "="
+  LESS_EQUAL,    ///< "<="
+  NOT_EQUAL,     ///< "<>"
+  LESS_THAN,     ///< "<"
+  GREAT_EQUAL,   ///< ">="
+  GREAT_THAN,    ///< ">"
+  STR_LIKE,      ///< "LIKE"
+  STR_NOT_LIKE,  ///< "NOT LIKE"
   NO_OP
 };
 
+enum CondOp
+{
+  AND_T,
+  OR_T,
+};
 /**
  * @brief 表示一个条件比较
  * @ingroup SQLParser
@@ -101,12 +106,18 @@ struct ConditionSqlNode
  * where 条件 conditions，这里表示使用AND串联起来多个条件。正常的SQL语句会有OR，NOT等，
  * 甚至可以包含复杂的表达式。
  */
+struct InnerJoinSqlNode
+{
+  std::string                   relation_name;
+  std::vector<ConditionSqlNode> join_conditions;
+};
 
 struct SelectSqlNode
 {
   std::vector<RelAttrSqlNode>   attributes;  ///< attributes in select clause
   std::vector<std::string>      relations;   ///< 查询的表
   std::vector<ConditionSqlNode> conditions;  ///< 查询条件，使用AND串联起来多个条件
+  std::vector<InnerJoinSqlNode> joins;
 };
 
 /**
@@ -142,13 +153,13 @@ struct DeleteSqlNode
 };
 
 /**
-  * update set a=xx, b=xx
-  * 记录 a xx, b xx
-  */
+ * update set a=xx, b=xx
+ * 记录 a xx, b xx
+ */
 struct UpdateListSqlNode
 {
-  std::string                   attribute_name;
-  Value                         value;
+  std::string attribute_name;
+  Value       value;
 };
 
 /**
@@ -157,11 +168,11 @@ struct UpdateListSqlNode
  */
 struct UpdateSqlNode
 {
-  std::string                   relation_name;   ///< Relation to update
+  std::string relation_name;  ///< Relation to update
   // std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
   // Value                         value;           ///< 更新的值，仅支持一个字段
   std::vector<UpdateListSqlNode> update_list;
-  std::vector<ConditionSqlNode> conditions;
+  std::vector<ConditionSqlNode>  conditions;
 };
 
 /**
@@ -206,11 +217,11 @@ struct DropTableSqlNode
  */
 struct CreateIndexSqlNode
 {
-  std::string index_name;      ///< Index name
-  std::string relation_name;   ///< Relation name
+  std::string index_name;     ///< Index name
+  std::string relation_name;  ///< Relation name
   // std::string attribute_name;  ///< Attribute name
-  std::vector<std::string> attributes; ///< Attribute names
-  bool unique;
+  std::vector<std::string> attributes;  ///< Attribute names
+  bool                     unique;
 };
 
 /**

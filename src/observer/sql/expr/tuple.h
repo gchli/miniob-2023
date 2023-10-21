@@ -111,6 +111,7 @@ public:
     }
     return str;
   }
+  virtual Tuple *copy() const { return nullptr; }
 };
 
 /**
@@ -174,7 +175,14 @@ public:
     }
     return RC::NOTFOUND;
   }
-
+  Tuple *copy() const override
+  {
+    RowTuple *new_tuple  = new RowTuple();
+    Record   *new_record = new Record(*record_);
+    new_tuple->set_record(new_record);
+    new_tuple->set_schema(table_, table_->table_meta().field_metas());
+    return new_tuple;
+  }
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {
@@ -308,7 +316,12 @@ public:
     cell = cells_[index];
     return RC::SUCCESS;
   }
-
+  Tuple *copy() const override
+  {
+    ValueListTuple *new_tuple = new ValueListTuple();
+    new_tuple->set_cells(cells_);
+    return new_tuple;
+  }
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override { return RC::INTERNAL; }
 
 private:
@@ -323,13 +336,28 @@ private:
 class JoinedTuple : public Tuple
 {
 public:
-  JoinedTuple()          = default;
+  JoinedTuple() = default;
+  JoinedTuple(const JoinedTuple &other) : left_(other.left_), right_(other.right_){};
+  JoinedTuple(Tuple *left, Tuple *right) : left_(left), right_(right){};
+  JoinedTuple &operator=(const JoinedTuple &other)
+  {
+    this->left_ = other.get_left(), this->right_ = other.get_right();
+    return *this;
+  };
   virtual ~JoinedTuple() = default;
 
-  void set_left(Tuple *left) { left_ = left; }
-  void set_right(Tuple *right) { right_ = right; }
-
-  int cell_num() const override { return left_->cell_num() + right_->cell_num(); }
+  void   set_left(Tuple *left) { left_ = left; }
+  void   set_right(Tuple *right) { right_ = right; }
+  Tuple *get_left() const { return left_; };
+  Tuple *get_right() const { return right_; };
+  int    cell_num() const override { return left_->cell_num() + right_->cell_num(); }
+  Tuple *copy() const override
+  {
+    JoinedTuple *new_tuple = new JoinedTuple();
+    new_tuple->set_left(left_->copy());
+    new_tuple->set_right(right_->copy());
+    return new_tuple;
+  }
 
   RC cell_at(int index, Value &value) const override
   {

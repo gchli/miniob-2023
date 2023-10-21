@@ -44,6 +44,7 @@ void Aggregator::add_tuple(Tuple *tuple)
       }
     } break;
     case MIN_T: {
+      // todo(ligch): maybe bugs here
       if (val.attr_type() == NULLS) {
         val_ = val;
         break;
