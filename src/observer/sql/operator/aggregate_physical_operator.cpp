@@ -56,7 +56,7 @@ void Aggregator::add_tuple(Tuple *tuple)
     } break;
     case AVG_T: {
       if (val.is_null()) {
-        val_ = val;
+        // val_ = val;
         break;
       }
       assert(rc == RC::SUCCESS);
@@ -67,7 +67,7 @@ void Aggregator::add_tuple(Tuple *tuple)
     } break;
     case SUM_T: {
       if (val.is_null()) {
-        val_ = val;
+        // val_ = val;
         break;
       }
       assert(rc == RC::SUCCESS);
