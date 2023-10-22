@@ -178,12 +178,22 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
     return rc;
   }
+  bool has_order_by = !select_stmt->order_by_stmts().empty();
   // todo(ligch): 可以简化逻辑
   unique_ptr<LogicalOperator> logical_oper;
   if (!has_aggr) {
-    logical_oper = std::move(make_unique<ProjectLogicalOperator>(all_exprs));
+    auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_exprs));
+    // logical_oper = proj_oper;
+    if (has_order_by) {
+      proj_oper->add_order_by(select_stmt->order_by_stmts());
+    }
+    logical_oper = std::move(proj_oper);
   } else {
-    logical_oper = std::move(make_unique<AggregateLogicalOperator>(all_exprs));
+    auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_exprs));
+    logical_oper   = std::move(aggr_oper);
+    if (has_order_by) {
+      aggr_oper->add_order_by(select_stmt->order_by_stmts());
+    }
   }
 
   if (predicate_oper) {
@@ -198,35 +208,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
 
   logical_operator.swap(logical_oper);
-
-  // if (!has_aggr) {
-  //   unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_exprs));
-  //   if (predicate_oper) {
-  //     if (table_oper) {
-  //       predicate_oper->add_child(std::move(table_oper));
-  //     }
-  //     project_oper->add_child(std::move(predicate_oper));
-  //   } else {
-  //     if (table_oper) {
-  //       project_oper->add_child(std::move(table_oper));
-  //     }
-  //   }
-
-  //   logical_operator.swap(project_oper);
-  // } else {
-  //   unique_ptr<LogicalOperator> aggregate_oper(new AggregateLogicalOperator(all_exprs));
-  //   if (predicate_oper) {
-  //     if (table_oper) {
-  //       predicate_oper->add_child(std::move(table_oper));
-  //     }
-  //     aggregate_oper->add_child(std::move(predicate_oper));
-  //   } else {
-  //     if (table_oper) {
-  //       aggregate_oper->add_child(std::move(table_oper));
-  //     }
-  //   }
-  //   logical_operator.swap(aggregate_oper);
-  // }
   return RC::SUCCESS;
 }
 
@@ -262,8 +243,9 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 
 RC LogicalPlanGenerator::create_plan(InsertStmt *insert_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
-  Table        *table = insert_stmt->table();
-  std::vector<std::vector<Value>> insert_values(insert_stmt->insert_values(), insert_stmt->insert_values() + insert_stmt->insert_amount());
+  Table                          *table = insert_stmt->table();
+  std::vector<std::vector<Value>> insert_values(
+      insert_stmt->insert_values(), insert_stmt->insert_values() + insert_stmt->insert_amount());
 
   InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, insert_values);
   logical_operator.reset(insert_operator);

@@ -140,13 +140,9 @@ void Value::set_value(const Value &value)
   }
 }
 
-void Value::set_null() {
-  null = true;
-}
+void Value::set_null() { null = true; }
 
-bool Value::is_null() const {
-  return null;
-}
+bool Value::is_null() const { return null; }
 
 const char *Value::data() const
 {
@@ -195,6 +191,17 @@ std::string Value::to_string() const
 
 int Value::compare(const Value &other) const
 {
+  // NULL value compare
+  if (this->is_null() && other.is_null()) {
+    return 0;
+  }
+  if (this->is_null() && !other.is_null()) {
+    return -1;
+  }
+  if (!this->is_null() && other.is_null()) {
+    return 1;
+  }
+
   if (this->attr_type_ == other.attr_type_) {
     switch (this->attr_type_) {
       case INTS: {

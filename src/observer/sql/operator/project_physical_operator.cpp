@@ -13,9 +13,13 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "common/log/log.h"
+#include "sql/expr/tuple.h"
 #include "sql/operator/project_physical_operator.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/parser/value.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
+#include <memory>
 
 RC ProjectPhysicalOperator::open(Trx *trx)
 {
@@ -24,12 +28,31 @@ RC ProjectPhysicalOperator::open(Trx *trx)
   }
 
   PhysicalOperator *child = children_[0].get();
-  RC rc = child->open(trx);
+  RC                rc    = child->open(trx);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
-
+  if (!order_by_exprs_.empty()) {
+    while (RC::SUCCESS == (rc = child->next())) {
+      // only jointuple rowtuple implement copy
+      ordered_tuples_.push_back(shared_ptr<Tuple>(child->current_tuple()->copy()));
+    }
+    sort(ordered_tuples_.begin(), ordered_tuples_.end(), [this](shared_ptr<Tuple> t1, shared_ptr<Tuple> t2) {
+      for (int i = 0; i < order_by_exprs_.size(); ++i) {
+        const auto &order_by_expr = order_by_exprs_[i];
+        const auto &order_by_type = order_by_type_[i];
+        Value       val1, val2;
+        order_by_expr->get_value(*t1, val1);
+        order_by_expr->get_value(*t2, val2);
+        int comp_result = val1.compare(val2);
+        if (comp_result != 0) {
+          return order_by_type == ASC_T ? comp_result < 0 : comp_result > 0;
+        }
+      }
+      return true;
+    });
+  }
   return RC::SUCCESS;
 }
 
@@ -37,6 +60,13 @@ RC ProjectPhysicalOperator::next()
 {
   if (children_.empty()) {
     return RC::RECORD_EOF;
+  }
+  if (!order_by_exprs_.empty()) {
+    if (cur_index >= ordered_tuples_.size()) {
+      return RC::RECORD_EOF;
+    }
+    tuple_.set_tuple(ordered_tuples_[cur_index++].get());
+    return RC::SUCCESS;
   }
   return children_[0]->next();
 }
@@ -48,9 +78,13 @@ RC ProjectPhysicalOperator::close()
   }
   return RC::SUCCESS;
 }
+
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  tuple_.set_tuple(children_[0]->current_tuple());
+  if (order_by_exprs_.empty()) {
+    tuple_.set_tuple(children_[0]->current_tuple());
+  }
+
   return &tuple_;
 }
 
