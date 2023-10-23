@@ -19,6 +19,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/logical_operator.h"
 #include "sql/expr/expression.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/stmt/order_by_stmt.h"
 #include "storage/field/field.h"
 
 /**

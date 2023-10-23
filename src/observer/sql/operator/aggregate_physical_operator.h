@@ -90,12 +90,21 @@ public:
 
   const std::vector<std::shared_ptr<Expression>> &aggr_exprs() const { return aggr_exprs_; }
 
+  void set_order_by(std::vector<shared_ptr<Expression>> &order_by_exprs, std::vector<OrderType> &order_by_type)
+  {
+    order_by_exprs_.swap(order_by_exprs);
+    order_by_type_.swap(order_by_type);
+  }
+
 private:
   std::vector<std::shared_ptr<Expression>> aggr_exprs_;
   std::vector<std::unique_ptr<Expression>> aggr_exprs_output_;
   AggregationTable                         aggregate_table_;
   // std::unordered_map<std::vector<ExpressionTuple>, AggregationTable, TupleHash> group_by_tables_;
-  int                     cur_index_{0};
-  vector<ExpressionTuple> result_tuples_;
-  Value                   val_;
+  int                                 cur_index_{0};
+  vector<ExpressionTuple>             result_tuples_;
+  Value                               val_;
+  std::vector<shared_ptr<Expression>> order_by_exprs_;
+  std::vector<OrderType>              order_by_type_;
+  std::vector<ProjectTuple>           ordered_tuples_;
 };

@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/stmt/join_stmt.h"
+#include "sql/stmt/order_by_stmt.h"
 #include "storage/db/db.h"
 #include "storage/field/field_meta.h"
 #include "storage/table/table.h"
@@ -246,6 +247,40 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+  // create order by statements
+  std::vector<shared_ptr<OrderByStmt>> order_by_stmts;
+  for (int i = 0; i < select_sql.order_bys.size(); i++) {
+    const OrderBySqlNode &order_by_node = select_sql.order_bys[i];
+    OrderType             order_by_type = order_by_node.order_type;
+    const char           *table_name    = order_by_node.attr.relation_name.c_str();
+    const char           *field_name    = order_by_node.attr.attribute_name.c_str();
+    Table                *table         = default_table;
+
+    if ((0 == strcmp(field_name, "*")) || (0 == strcmp(table_name, "*"))) {
+      LOG_WARN("invalid field name in order by stmt while table or filed is *. attr=%s", field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+
+    if (!common::is_blank(table_name)) {
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      table = iter->second;
+    } else {
+      if (tables.size() != 1) {
+        LOG_WARN("table size should be 1 for order by stmt.");
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    order_by_stmts.emplace_back(make_shared<OrderByStmt>(order_by_type, table, field_meta));
+  }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
@@ -254,6 +289,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->query_exprs_.swap(query_exprs);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->join_stmts_.swap(join_stmts);
+  select_stmt->order_by_stmts_.swap(order_by_stmts);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

@@ -247,8 +247,16 @@ public:
     return tuple_->find_cell(*spec, cell);
   }
 
-  RC find_cell(const TupleCellSpec &spec, Value &cell) const override { return tuple_->find_cell(spec, cell); }
-
+  RC     find_cell(const TupleCellSpec &spec, Value &cell) const override { return tuple_->find_cell(spec, cell); }
+  Tuple *copy() const override
+  {
+    ProjectTuple *new_tuple = new ProjectTuple();
+    new_tuple->tuple_       = tuple_->copy();
+    for (const TupleCellSpec *spec : speces_) {
+      new_tuple->add_cell_spec(new TupleCellSpec(*spec));
+    }
+    return new_tuple;
+  }
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {
@@ -293,9 +301,15 @@ public:
     }
     return RC::NOTFOUND;
   }
+  Tuple *copy() const override
+  {
+    ExpressionTuple *new_tuple = new ExpressionTuple(expressions_);
+    return new_tuple;
+  }
 
 private:
-  const std::vector<std::unique_ptr<Expression>> &expressions_;
+  // const std::vector<std::unique_ptr<Expression>> &expressions_;
+  std::vector<std::unique_ptr<Expression>> &expressions_;
 };
 
 /**
