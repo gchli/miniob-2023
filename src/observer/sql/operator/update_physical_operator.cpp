@@ -53,8 +53,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     rc = oper->next();
     if (rc != RC::RECORD_EOF) {
       LOG_WARN("more than one record in update-select");
-      rc = RC::INVALID_ARGUMENT;
-      return rc;
+      wrong_select_ = true;
     }
     if (tuple->cell_num() != 1) {
       LOG_WARN("invalid tuple cell num: %d to update", tuple->cell_num());
@@ -82,6 +81,10 @@ RC UpdatePhysicalOperator::next()
 
   PhysicalOperator *child = children_[0].get();
   while (RC::SUCCESS == (rc = child->next())) {
+    if (wrong_select_) {
+      LOG_WARN("more than one record in update-select");
+      return RC::INVALID_ARGUMENT;
+    }
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
       LOG_WARN("failed to get current record: %s", strrc(rc));

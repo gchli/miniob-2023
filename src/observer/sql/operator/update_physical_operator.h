@@ -36,4 +36,5 @@ private:
   std::unordered_map<size_t, size_t> select_oper_;
   std::unordered_map<size_t, Value> value_map_;
   Trx        *trx_ = nullptr;
+  bool wrong_select_ = false;
 };
