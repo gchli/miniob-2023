@@ -186,9 +186,17 @@ RC MvccTrx::delete_record(Table * table, Record &record)
   return RC::SUCCESS;
 }
 
-RC MvccTrx::update_record(Table *table, const Record &old_record, const Record &new_record) {
-  LOG_ERROR("mvcc update record not implemente");
-  return RC::INTERNAL;
+RC MvccTrx::update_record(Table *table, Record &old_record, Record &new_record) {
+  RC rc;
+  rc = delete_record(table, old_record);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+  rc = insert_record(table, new_record);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+  return RC::SUCCESS;
 }
 
 

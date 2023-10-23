@@ -66,7 +66,7 @@ RC VacuousTrx::visit_record(Table *table, Record &record, bool readonly)
   return RC::SUCCESS;
 }
 
-RC VacuousTrx::update_record(Table *table, const Record &old_record, const Record &new_record) {
+RC VacuousTrx::update_record(Table *table, Record &old_record, Record &new_record) {
   return table->update_record(old_record, new_record);
 }
 

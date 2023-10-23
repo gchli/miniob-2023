@@ -265,7 +265,7 @@ private:
 private:
   common::Mutex lock_;  ///< 加锁支持多线程并发写入
   std::deque<std::unique_ptr<CLogRecord>> log_records_;  ///< 当前等待刷数据的日志记录
-  std::atomic_int32_t total_size_;  ///< 当前缓存中的日志记录的总大小
+  std::atomic_int32_t total_size_{0};  ///< 当前缓存中的日志记录的总大小
 };
 
 /**
