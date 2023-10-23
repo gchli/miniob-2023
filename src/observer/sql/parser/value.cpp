@@ -298,7 +298,7 @@ RC Value::convert_to(AttrType type) {
         set_string(common::double_to_str(val).c_str());
       } break;
       default: {
-        LOG_ERROR("Invalid convert type. type=%d", type);
+        LOG_WARN("Invalid convert type. type=%d", type);
         return RC::INVALID_ARGUMENT;
       }
     }
@@ -314,7 +314,7 @@ RC Value::convert_to(AttrType type) {
         set_string(std::to_string(val).c_str());
       } break;
       default: {
-        LOG_ERROR("Invalid convert type. type=%d", type);
+        LOG_WARN("Invalid convert type. type=%d", type);
         return RC::INVALID_ARGUMENT;
       }
     }
@@ -324,20 +324,30 @@ RC Value::convert_to(AttrType type) {
     std::string val = get_string();
     switch (type) {
       case FLOATS: {
-        set_float(std::stof(val));
+        try {
+          set_float(std::stof(val));
+        } catch (std::exception const &ex) {
+          LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+          return RC::INVALID_ARGUMENT;
+        }
       } break;
       case INTS: {
-        set_int(std::stoi(val));
+        try {
+          set_int(std::stoi(val));
+        } catch (std::exception const &ex) {
+          LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+          return RC::INVALID_ARGUMENT;
+        }
       } break;
       default: {
-        LOG_ERROR("Invalid convert type. type=%d", type);
+        LOG_WARN("Invalid convert type. type=%d", type);
         return RC::INVALID_ARGUMENT;
       }
     }
     break;
   }
   default: {
-    LOG_ERROR("Invalid convert type. type=%d", type);
+    LOG_WARN("Invalid convert type. type=%d", type);
     return RC::INVALID_ARGUMENT;
   }
   }

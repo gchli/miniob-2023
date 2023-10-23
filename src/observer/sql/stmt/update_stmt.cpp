@@ -92,7 +92,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
           table_name, field_meta->name(), field_meta->type(), value.attr_type());
       } else if ((rc = value.convert_to(field_meta->type())) != RC::SUCCESS){
         rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
-        LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+        LOG_WARN("failed to create update statement. rc=%d:%s", rc, strrc(rc));
         return rc;         
       }
     }
