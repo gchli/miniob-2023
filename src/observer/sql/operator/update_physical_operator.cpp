@@ -50,11 +50,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       LOG_WARN("failed to get current record: %s", strrc(rc));
       return rc;
     }
-    rc = oper->next();
-    if (rc != RC::RECORD_EOF) {
-      LOG_WARN("more than one record in update-select");
-      wrong_select_ = true;
-    }
     if (tuple->cell_num() != 1) {
       LOG_WARN("invalid tuple cell num: %d to update", tuple->cell_num());
       return RC::INVALID_ARGUMENT;
@@ -65,6 +60,11 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
     value_map_[pair.first] = value;
+    rc = oper->next();
+    if (rc != RC::RECORD_EOF) {
+      LOG_WARN("more than one record in update-select");
+      wrong_select_ = true;
+    }
   }
 
   trx_ = trx;
