@@ -162,6 +162,8 @@ struct UpdateListSqlNode
 {
   std::string attribute_name;
   Value       value;
+  SelectSqlNode select;
+  bool is_select = false;
 };
 
 /**

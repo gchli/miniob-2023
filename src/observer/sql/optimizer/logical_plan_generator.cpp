@@ -38,9 +38,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/update_stmt.h"
 #include "storage/field/field.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include <cassert>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 using namespace std;
@@ -317,14 +319,35 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
+  int col_update = update_stmt->field_metas().size();
+  std::unordered_map<size_t, size_t> select_oper_map;
+  int oper_cnt = 1;
+
+  for (int i = 0; i < col_update; i++) {
+    if (update_stmt->select_map().find(i) != update_stmt->select_map().end()) {
+      select_oper_map.emplace(i, oper_cnt++);
+    }
+  }
+
   unique_ptr<LogicalOperator> update_oper(
-      new UpdateLogicalOperator(table, update_stmt->attribute_names(), update_stmt->values()));
+      new UpdateLogicalOperator(table, std::move(update_stmt->field_metas()), std::move(update_stmt->value_map()), std::move(select_oper_map)));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
     update_oper->add_child(std::move(predicate_oper));
   } else {
     update_oper->add_child(std::move(table_get_oper));
+  }
+
+  for (int i = 0; i < col_update; i++) {
+    if (update_stmt->select_map().find(i) != update_stmt->select_map().end()) {
+      unique_ptr<LogicalOperator> select_oper;
+      rc = create_plan(&update_stmt->select_map()[i], select_oper);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      update_oper->add_child(std::move(select_oper));
+    }
   }
 
   logical_operator = std::move(update_oper);

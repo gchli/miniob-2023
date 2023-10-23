@@ -64,7 +64,7 @@ public:
   RC open(const char *meta_file, const char *base_dir);
 
   // 制作一个新的Record，使用对应的Attr与Value替换，用来update
-  RC make_update_record(Record &new_record, Record &old_record, const std::vector<std::string> &attributes, const std::vector<Value> &values);
+  RC make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas, const std::unordered_map<size_t, Value> &value_map);
 
   // 通过attribute获得FieldMeta，或许应该移动到tablemeta中
   RC get_field_meta_by_name(FieldMeta const *&field_meta, const std::string &attribute);

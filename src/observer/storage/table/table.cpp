@@ -12,10 +12,12 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
+#include <cstddef>
 #include <fcntl.h>
 #include <limits.h>
 #include <string.h>
 #include <algorithm>
+#include <unordered_map>
 #include <vector>
 
 #include "common/date.h"
@@ -362,24 +364,19 @@ RC Table::get_field_meta_by_name(FieldMeta const *&field_meta, const std::string
   return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
-RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<std::string> &attributes, const std::vector<Value> &values)
+RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas, const std::unordered_map<size_t, Value> &value_map)
 {
   int   record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
   memcpy(record_data, old_record.data(), record_size);
 
-  int col_count = attributes.size();
+  int col_count = field_metas.size();
   const FieldMeta *field = nullptr;
 
-  for (int i = 0; i < attributes.size(); i++) {
-    const std::string &attribute = attributes[i];
-    RC rc = this->get_field_meta_by_name(field, attribute);
-    if (rc != RC::SUCCESS) {
-      free(record_data);
-      return RC::SCHEMA_FIELD_NOT_EXIST;
-    }
+  for (size_t i = 0; i < col_count; i++) {
+    field = field_metas[i];
 
-    const Value &value = values[i];
+    const Value &value = value_map.at(i);
     // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
     if (field->type() != value.attr_type()) {
       if (field->type() == DATES && value.attr_type() == CHARS) {
@@ -398,6 +395,16 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
       }
       free(record_data);
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+    if (value.is_null()) {
+      if (field->nullable()) {
+        set_mem_null(record_data + field->offset(), field->type(), field->len());
+        continue;
+      } else {
+        LOG_ERROR("Insert null attribute into not null field. table name =%s, field name=%s, type=%d",
+                  table_meta_.name(), field->name(), field->type());
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
     }
 
     size_t copy_len = field->len();

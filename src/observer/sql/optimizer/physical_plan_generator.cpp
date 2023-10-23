@@ -12,10 +12,12 @@ See the Mulan PSL v2 for more details. */
 // Created by Wangyunlai on 2022/12/14.
 //
 
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include "sql/operator/aggregate_logical_operator.h"
+#include "sql/operator/logical_operator.h"
 #include "sql/operator/update_logical_operator.h"
 #include "sql/operator/update_physical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
@@ -38,6 +40,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/calc_physical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
+#include "sql/stmt/select_stmt.h"
 
 using namespace std;
 
@@ -276,23 +279,38 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
 {
   vector<unique_ptr<LogicalOperator>> &child_opers = update_oper.children();
 
-  unique_ptr<PhysicalOperator> child_physical_oper;
+  std::vector<unique_ptr<PhysicalOperator>> child_physical_opers;
 
   RC rc = RC::SUCCESS;
   if (!child_opers.empty()) {
+    unique_ptr<PhysicalOperator> child_physical_oper;
     LogicalOperator *child_oper = child_opers.front().get();
     rc                          = create(*child_oper, child_physical_oper);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
       return rc;
     }
+    child_physical_opers.emplace_back(std::move(child_physical_oper));
+  }
+
+  for (auto child_expr = child_opers.begin()+1; child_expr != child_opers.end(); ++child_expr) {
+    LogicalOperator *child_oper = child_expr->get();
+    unique_ptr<PhysicalOperator> child_physical_oper;
+    rc = create(*child_oper, child_physical_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+    child_physical_opers.emplace_back(std::move(child_physical_oper));
   }
 
   oper = unique_ptr<PhysicalOperator>(
-      new UpdatePhysicalOperator(update_oper.table(), update_oper.attribute_names(), update_oper.values()));
+      new UpdatePhysicalOperator(update_oper.table(), std::move(update_oper.field_metas()), std::move(update_oper.value_map()), std::move(update_oper.select_oper())));
 
-  if (child_physical_oper) {
-    oper->add_child(std::move(child_physical_oper));
+  if (!child_physical_opers.empty()) {
+    for (auto &&child_physical_oper : child_physical_opers) {
+      oper->add_child(std::move(child_physical_oper));
+    }
   }
 
   return rc;

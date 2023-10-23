@@ -133,7 +133,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::string> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
+  UpdateListSqlNode *               update_pair;
   InnerJoinSqlNode *                inner_join;
+  SelectSqlNode *                   select_body;
   std::vector<InnerJoinSqlNode> *   inner_join_list;
   char *                            string;
   int                               number;
@@ -173,9 +175,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attribute_list>      id_list
 %type <is_null>             attr_null
 %type <update_list>         update_list
+%type <update_pair>         update_pair
 %type <insert_list>         insert_list
 %type <inner_join>          inner_join
 %type <inner_join_list>     inner_join_list
+%type <select_body>         select_body
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -572,40 +576,52 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value update_list where
+    UPDATE ID SET update_pair update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
       
-      if ($7 != nullptr) {
-        $$->update.update_list.swap(*$7);
+      if ($5 != nullptr) {
+        $$->update.update_list.swap(*$5);
+        delete $5;
       }
-      $$->update.update_list.emplace_back(UpdateListSqlNode{$4, *$6});
+      $$->update.update_list.emplace_back(*$4);
+      delete $4;
       std::reverse($$->update.update_list.begin(), $$->update.update_list.end());
 
-      if ($8 != nullptr) {
-        $$->update.conditions.swap(*$8);
-        delete $8;
+      if ($6 != nullptr) {
+        $$->update.conditions.swap(*$6);
+        delete $6;
       }
       free($2);
-      free($4);
-      free($7);
     }
-    ;
+
+update_pair:
+  ID EQ value
+  {
+    $$ = new UpdateListSqlNode{$1, *$3, SelectSqlNode{}, false};
+    free($3);
+  }
+  | ID EQ LBRACE select_body RBRACE
+  {
+    $$ = new UpdateListSqlNode{$1, Value{}, *$4, true};
+    free($4);
+  }
 
 update_list:
     {
       $$ = nullptr;
     }
-    | COMMA ID EQ value update_list
+    | COMMA update_pair update_list
     {
-      if ($5 == nullptr) {
-        $$ = new std::vector<UpdateListSqlNode>;
+      if ($3 != nullptr) {
+        $$ = $3;
       } else {
-        $$ = $5;
+        $$ = new std::vector<UpdateListSqlNode>;
       }
-      $$->emplace_back(UpdateListSqlNode{$2, *$4});
-      free($4);
+
+      $$->emplace_back(*$2);
+      free($2);
     }
     ;
 
@@ -631,28 +647,38 @@ select_stmt:        /*  select 语句的语法解析树*/
       free($4);
     }*/
     //join_list 后有可能出现rel_list吗？
-    SELECT select_attr FROM ID rel_list inner_join_list where
+    select_body
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
+      if ($1 != nullptr) {
+        $$->selection = *$1;
+        delete $1;
+      }
+    }
+
+select_body:
+    SELECT select_attr FROM ID rel_list inner_join_list where
+    {
+      $$ = new SelectSqlNode;
       if ($2 != nullptr) {
-        $$->selection.attributes.swap(*$2);
+        $$->attributes.swap(*$2);
         delete $2;
       }
       if ($5 != nullptr) {
-        $$->selection.relations.swap(*$5);
+        $$->relations.swap(*$5);
         delete $5;
       }
-      $$->selection.relations.push_back($4);
-      std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+      $$->relations.push_back($4);
+      std::reverse($$->relations.begin(), $$->relations.end());
 
       if ($6 != nullptr) {
-        $$->selection.joins.swap(*$6);
-        std::reverse($$->selection.joins.begin(), $$->selection.joins.end());
+        $$->joins.swap(*$6);
+        std::reverse($$->joins.begin(), $$->joins.end());
         delete $6;
       }
 
       if ($7 != nullptr) {
-        $$->selection.conditions.swap(*$7);
+        $$->conditions.swap(*$7);
         delete$7;
       }
       free($4);

@@ -16,10 +16,21 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "sql/stmt/stmt.h"
+#include "storage/field/field.h"
+#include "storage/field/field_meta.h"
 #include <string>
+#include <unordered_map>
 
 class Table;
+
+struct UpdateUnit {
+  const FieldMeta *update_field_meta;
+  Value update_value; // maybe expression later
+  SelectStmt select_stmt;
+  bool is_select;
+};
 
 /**
  * @brief 更新语句
@@ -29,7 +40,7 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, const std::vector<Value> &values, const std::vector<std::string> &attribute_names, FilterStmt *filter_stmt);
+  UpdateStmt(Table *table, FilterStmt *filter_stmt, std::vector<const FieldMeta *> &&field_metas, std::unordered_map<size_t, Value> &&value_map, std::unordered_map<size_t, SelectStmt> &&select_map);
   ~UpdateStmt() override;
 
   StmtType type() const override
@@ -44,22 +55,27 @@ public:
   {
     return table_;
   }
-  const std::vector<Value> values() const
-  {
-    return values_;
-  }
   FilterStmt *filter_stmt() const
   {
     return filter_stmt_;
   }
-  const std::vector<std::string> attribute_names() const
+  std::vector<const FieldMeta *> &field_metas()
   {
-    return attribute_names_;
+    return field_metas_;
   }
-
+  std::unordered_map<size_t, Value> &value_map()
+  {
+    return value_map_;
+  }
+  std::unordered_map<size_t, SelectStmt> &select_map()
+  {
+    return select_map_;
+  }
+  
 private:
   Table *table_ = nullptr;
-  const std::vector<Value> values_;
   FilterStmt *filter_stmt_;
-  const std::vector<std::string> attribute_names_;
+  std::vector<const FieldMeta *> field_metas_;
+  std::unordered_map<size_t, Value> value_map_;
+  std::unordered_map<size_t, SelectStmt> select_map_;
 };

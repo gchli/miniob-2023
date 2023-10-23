@@ -14,15 +14,19 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "common/log/log.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
+#include "sql/stmt/stmt.h"
 #include "storage/db/db.h"
 #include "storage/field/field_meta.h"
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
-UpdateStmt::UpdateStmt(Table *table, const std::vector<Value> &values, const std::vector<std::string> &attribute_names, FilterStmt *filter_stmt)
-    : table_(table), values_(values), attribute_names_(attribute_names), filter_stmt_(filter_stmt)
+UpdateStmt::UpdateStmt(Table *table, FilterStmt *filter_stmt, std::vector<const FieldMeta *> &&field_metas, std::unordered_map<size_t, Value> &&value_map, std::unordered_map<size_t, SelectStmt> &&select_map)
+    : table_(table), filter_stmt_(filter_stmt), field_metas_(std::move(field_metas)), value_map_(std::move(value_map)), select_map_(std::move(select_map))
 {}
 
 UpdateStmt::~UpdateStmt()
@@ -58,20 +62,23 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     return rc;
   }
 
-  std::vector<std::string> attribute_names;
-  std::vector<Value> values;
-  int col_cnt = update.update_list.size();
-  for (int i = 0; i < col_cnt; i++) {
+  size_t col_cnt = update.update_list.size();
+  std::vector<const FieldMeta *> field_metas;
+  std::unordered_map<size_t, Value> value_map;
+  std::unordered_map<size_t, SelectStmt> select_map;
+
+  for (int i = 0; i < col_cnt; ++i) {
+    const auto &update_pair = update.update_list[i];
     const FieldMeta *field_meta;
-    const std::string attribute_name = update.update_list[i].attribute_name;
-    const Value value = update.update_list[i].value;
+    const std::string attribute_name = update_pair.attribute_name;
+    const Value value = update_pair.value;
     RC rc = table->get_field_meta_by_name(field_meta, attribute_name);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
       return rc;
     }
 
-    if (field_meta->type() != value.attr_type()) {
+    if (field_meta->type() != value.attr_type() && !update_pair.is_select) {
       if (field_meta->type() == AttrType::DATES && value.attr_type() == AttrType::CHARS) {
         LOG_DEBUG("field type mismatch, convert string to date. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_meta->type(), value.attr_type());
@@ -89,11 +96,22 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
         return rc;         
       }
     }
+    field_metas.emplace_back(field_meta);
 
-    attribute_names.emplace_back(update.update_list[i].attribute_name);
-    values.emplace_back(update.update_list[i].value);
+    bool is_select = update_pair.is_select;
+    Stmt *select_stmt = nullptr;
+    if (is_select) {
+      rc = SelectStmt::create(db, update_pair.select, select_stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to create select stmt for update. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      select_map.emplace(i, *static_cast<SelectStmt*>(select_stmt));
+    } else {
+      value_map.emplace(i, value);
+    }
   }
-  stmt = new UpdateStmt(table, values, attribute_names, filter_stmt);
+  stmt = new UpdateStmt{table, filter_stmt, std::move(field_metas), std::move(value_map), std::move(select_map)};
 
   return RC::SUCCESS;
 }
