@@ -106,6 +106,11 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
         LOG_ERROR("failed to create select stmt for update. rc=%d:%s", rc, strrc(rc));
         return rc;
       }
+      if (static_cast<SelectStmt*>(select_stmt)->query_exprs().size() > 1) {
+        rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        LOG_WARN("failed to create update statement, more than 1 query exprs", rc, strrc(rc));
+        return rc;
+      }
       select_map.emplace(i, *static_cast<SelectStmt*>(select_stmt));
     } else {
       value_map.emplace(i, value);

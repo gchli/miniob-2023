@@ -33,8 +33,15 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   for (auto pair : select_oper_) {
     PhysicalOperator *oper = children_[pair.second].get();
+    Value value;
     rc = oper->next();
     if (rc != RC::SUCCESS) {
+      if (rc == RC::RECORD_EOF) {
+        LOG_INFO("no record found for update-select, fill with null");
+        value.set_null();
+        value_map_[pair.first] = value;
+        continue;
+      }
       LOG_WARN("failed to next child operator: %s", strrc(rc));
       return rc;
     }
@@ -45,14 +52,14 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     }
     rc = oper->next();
     if (rc != RC::RECORD_EOF) {
-      LOG_WARN("failed to next child operator: %s", strrc(rc));
+      LOG_WARN("more than one record in update-select");
+      rc = RC::INVALID_ARGUMENT;
       return rc;
     }
     if (tuple->cell_num() != 1) {
       LOG_WARN("invalid tuple cell num: %d to update", tuple->cell_num());
       return RC::INVALID_ARGUMENT;
     }
-    Value value;
     rc = tuple->cell_at(0, value);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to get cell value: %s", strrc(rc));
