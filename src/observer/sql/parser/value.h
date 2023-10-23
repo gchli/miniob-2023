@@ -69,6 +69,8 @@ public:
   int compare(const Value &other) const;
   bool compare_like(const Value &other) const;
 
+  RC convert_to(AttrType type);
+
   const char *data() const;
   int         length() const { return length_; }
 

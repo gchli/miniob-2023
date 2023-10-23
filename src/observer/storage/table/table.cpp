@@ -376,7 +376,7 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
   for (size_t i = 0; i < col_count; i++) {
     field = field_metas[i];
 
-    const Value &value = value_map.at(i);
+    Value value = value_map.at(i);
     // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
     if (field->type() != value.attr_type()) {
       if (field->type() == DATES && value.attr_type() == CHARS) {
@@ -393,8 +393,10 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
         set_mem_null(record_data + field->offset(), field->type(), field->len());
         continue; 
       }
-      free(record_data);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if (value.convert_to(field->type()) != RC::SUCCESS) {
+        free(record_data);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
     }
     if (value.is_null()) {
       if (field->nullable()) {

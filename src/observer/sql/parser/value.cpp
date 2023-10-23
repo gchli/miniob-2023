@@ -276,6 +276,67 @@ int Value::compare(const Value &other) const
   return -1;  // TODO return rc?
 }
 
+RC Value::convert_to(AttrType type) {
+  if (attr_type_ == type) {
+    return RC::SUCCESS;
+  }
+  switch (attr_type_) {
+  case FLOATS: {
+    float val = get_float();
+    switch (type) {
+      case INTS: {
+        set_int((int)val);
+      } break;
+      case CHARS: {
+        set_string(common::double_to_str(val).c_str());
+      } break;
+      default: {
+        LOG_ERROR("Invalid convert type. type=%d", type);
+        return RC::INVALID_ARGUMENT;
+      }
+    }
+    break;
+  }
+  case INTS: {
+    int val = get_int();
+    switch (type) {
+      case FLOATS: {
+        set_float((float)val);
+      } break;
+      case CHARS: {
+        set_string(std::to_string(val).c_str());
+      } break;
+      default: {
+        LOG_ERROR("Invalid convert type. type=%d", type);
+        return RC::INVALID_ARGUMENT;
+      }
+    }
+    break;
+  }
+  case CHARS: {
+    std::string val = get_string();
+    switch (type) {
+      case FLOATS: {
+        set_float(std::stof(val));
+      } break;
+      case INTS: {
+        set_int(std::stoi(val));
+      } break;
+      default: {
+        LOG_ERROR("Invalid convert type. type=%d", type);
+        return RC::INVALID_ARGUMENT;
+      }
+    }
+    break;
+  }
+  default: {
+    LOG_ERROR("Invalid convert type. type=%d", type);
+    return RC::INVALID_ARGUMENT;
+  }
+  }
+  return RC::SUCCESS;
+}
+
 bool Value::compare_like(const Value &other) const { return common::compare_string_like(str_value_, other.str_value_); }
 
 int Value::get_int() const

@@ -71,7 +71,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     const auto &update_pair = update.update_list[i];
     const FieldMeta *field_meta;
     const std::string attribute_name = update_pair.attribute_name;
-    const Value value = update_pair.value;
+    Value value = update_pair.value;
     RC rc = table->get_field_meta_by_name(field_meta, attribute_name);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
@@ -90,7 +90,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
       } else if (field_meta->nullable() && value.is_null()) {
         LOG_DEBUG("field convert null to nullable. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_meta->type(), value.attr_type());
-      } else {
+      } else if ((rc = value.convert_to(field_meta->type())) != RC::SUCCESS){
         rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
         LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
         return rc;         
