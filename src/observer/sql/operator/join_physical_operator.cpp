@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple.h"
 #include "sql/parser/value.h"
 #include "sql/stmt/filter_stmt.h"
+#include "storage/common/limits.h"
 #include <cstddef>
 #include <memory>
 #include <vector>
@@ -120,6 +121,9 @@ bool NestedLoopJoinPhysicalOperator::is_tuple_valid(const shared_ptr<FilterStmt>
     auto      comp_type     = filter_unit->comp();
     const int comp_result   = left_value.compare(right_value);
     bool      filter_result = false;
+    if (left_value.is_null() || right_value.is_null()) {
+      return false;
+    }
     switch (comp_type) {
       case EQUAL_TO: {
         filter_result = (0 == comp_result);
