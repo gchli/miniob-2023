@@ -267,7 +267,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         LOG_WARN("no such table in from list: %s", table_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
-      auto table = iter->second;
+      table = iter->second;
     } else {
       if (tables.size() != 1) {
         LOG_WARN("table size should be 1 for order by stmt.");

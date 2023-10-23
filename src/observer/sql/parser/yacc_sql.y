@@ -845,13 +845,11 @@ order_by_attr:
     ;
 
 order_by_list:
-    /* empty */
-    {
-      $$ = nullptr;
-    }
-    | order_by_attr
+    order_by_attr
     {
       $$ = new std::vector<OrderBySqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
     }
     | order_by_attr COMMA order_by_list {
       $$ = $3;
