@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/aggregate_logical_operator.h"
 #include "sql/operator/logical_operator.h"
 #include "sql/operator/calc_logical_operator.h"
+#include "sql/operator/order_by_logical_operator.h"
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/predicate_logical_operator.h"
 #include "sql/operator/table_get_logical_operator.h"
@@ -180,31 +181,37 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
   bool has_order_by = !select_stmt->order_by_stmts().empty();
   // todo(ligch): 可以简化逻辑
-  unique_ptr<LogicalOperator> logical_oper;
+
+  unique_ptr<LogicalOperator> order_by_oper;
+  unique_ptr<LogicalOperator> select_oper;
+  if (has_order_by) {
+    order_by_oper = std::move(make_unique<OrderByLogicalOperator>(select_stmt->order_by_stmts()));
+  }
+
   if (!has_aggr) {
     auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_exprs));
-    // logical_oper = proj_oper;
-    if (has_order_by) {
-      proj_oper->add_order_by(select_stmt->order_by_stmts());
-    }
-    logical_oper = std::move(proj_oper);
+    select_oper    = std::move(proj_oper);
   } else {
     auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_exprs));
-    logical_oper   = std::move(aggr_oper);
-    if (has_order_by) {
-      aggr_oper->add_order_by(select_stmt->order_by_stmts());
-    }
+    select_oper    = std::move(aggr_oper);
   }
 
   if (predicate_oper) {
     if (table_oper) {
       predicate_oper->add_child(std::move(table_oper));
     }
-    logical_oper->add_child(std::move(predicate_oper));
+    select_oper->add_child(std::move(predicate_oper));
   } else {
     if (table_oper) {
-      logical_oper->add_child(std::move(table_oper));
+      select_oper->add_child(std::move(table_oper));
     }
+  }
+  unique_ptr<LogicalOperator> logical_oper;
+
+  logical_oper = std::move(select_oper);
+  if (order_by_oper) {
+    order_by_oper->add_child(std::move(logical_oper));
+    logical_oper = std::move(order_by_oper);
   }
 
   logical_operator.swap(logical_oper);

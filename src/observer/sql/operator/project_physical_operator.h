@@ -39,16 +39,7 @@ public:
   int cell_num() const { return tuple_.cell_num(); }
 
   Tuple *current_tuple() override;
-  void   set_order_by(std::vector<shared_ptr<Expression>> &order_by_exprs, std::vector<OrderType> &order_by_type)
-  {
-    order_by_exprs_.swap(order_by_exprs);
-    order_by_type_.swap(order_by_type);
-  }
 
 private:
-  ProjectTuple                        tuple_;
-  std::vector<shared_ptr<Expression>> order_by_exprs_;
-  std::vector<OrderType>              order_by_type_;
-  std::vector<shared_ptr<Tuple>>      ordered_tuples_;
-  int                                 cur_index{0};
+  ProjectTuple tuple_;
 };

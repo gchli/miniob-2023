@@ -41,15 +41,6 @@ public:
   const std::vector<std::unique_ptr<Expression>> &expressions() const { return expressions_; }
   // const std::vector<Field>                       &fields() const { return fields_; }
   const std::vector<shared_ptr<Expression>> &proj_exprs() const { return proj_exprs_; }
-  void                                       add_order_by(const vector<shared_ptr<OrderByStmt>> &order_by_stmt)
-  {
-    for (const auto &stmt : order_by_stmt) {
-      order_by_exprs_.push_back(stmt->get_attr_expr());
-      order_by_type_.push_back(stmt->get_order_type());
-    }
-  }
-  std::vector<shared_ptr<Expression>> &order_by_exprs() { return order_by_exprs_; }
-  std::vector<OrderType>              &order_by_type() { return order_by_type_; }
 
 private:
   //! 投影映射的字段名称
@@ -58,6 +49,4 @@ private:
   //! 不过现在简单处理，就使用字段来描述
   // std::vector<Field>                  fields_;
   std::vector<shared_ptr<Expression>> proj_exprs_;
-  std::vector<shared_ptr<Expression>> order_by_exprs_;
-  std::vector<OrderType>              order_by_type_;
 };

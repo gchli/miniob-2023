@@ -14,14 +14,14 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/log/log.h"
 #include "sql/expr/tuple.h"
-#include "sql/operator/project_physical_operator.h"
+#include "sql/operator/order_by_physical_operator.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
 #include <memory>
 
-RC ProjectPhysicalOperator::open(Trx *trx)
+RC OrderByPhysicalOperator::open(Trx *trx)
 {
   if (children_.empty()) {
     return RC::SUCCESS;
@@ -33,18 +33,44 @@ RC ProjectPhysicalOperator::open(Trx *trx)
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
+
+  while (RC::SUCCESS == (rc = child->next())) {
+    // only jointuple rowtuple implement copy
+    ordered_tuples_.push_back(shared_ptr<Tuple>(child->current_tuple()->copy()));
+  }
+  sort(ordered_tuples_.begin(), ordered_tuples_.end(), [this](shared_ptr<Tuple> t1, shared_ptr<Tuple> t2) {
+    for (int i = 0; i < order_by_exprs_.size(); ++i) {
+      const auto &order_by_expr = order_by_exprs_[i];
+      const auto &order_by_type = order_by_type_[i];
+      Value       val1, val2;
+      order_by_expr->get_value(*t1, val1);
+      order_by_expr->get_value(*t2, val2);
+      int comp_result = val1.compare(val2);
+      if (comp_result != 0) {
+        return order_by_type == ASC_T ? comp_result < 0 : comp_result > 0;
+      }
+    }
+    return true;
+  });
+
   return RC::SUCCESS;
 }
 
-RC ProjectPhysicalOperator::next()
+RC OrderByPhysicalOperator::next()
 {
   if (children_.empty()) {
     return RC::RECORD_EOF;
   }
-  return children_[0]->next();
+
+  if (cur_index >= ordered_tuples_.size()) {
+    return RC::RECORD_EOF;
+  }
+  // tuple_->set_tuple(ordered_tuples_[cur_index++].get());
+  tuple_ = ordered_tuples_[cur_index++];
+  return RC::SUCCESS;
 }
 
-RC ProjectPhysicalOperator::close()
+RC OrderByPhysicalOperator::close()
 {
   if (!children_.empty()) {
     children_[0]->close();
@@ -52,16 +78,4 @@ RC ProjectPhysicalOperator::close()
   return RC::SUCCESS;
 }
 
-Tuple *ProjectPhysicalOperator::current_tuple()
-{
-  tuple_.set_tuple(children_[0]->current_tuple());
-  return &tuple_;
-}
-
-void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
-{
-  // 对单表来说，展示的(alias) 字段总是字段名称，
-  // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
-  tuple_.add_cell_spec(spec);
-}
+Tuple *OrderByPhysicalOperator::current_tuple() { return tuple_.get(); }
