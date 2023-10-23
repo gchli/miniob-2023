@@ -98,17 +98,16 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     }
     field_metas.emplace_back(field_meta);
 
-    bool is_select = update_pair.is_select;
-    Stmt *select_stmt = nullptr;
-    if (is_select) {
+    if (update_pair.is_select) {
+      Stmt *select_stmt = nullptr;
       rc = SelectStmt::create(db, update_pair.select, select_stmt);
       if (rc != RC::SUCCESS) {
         LOG_ERROR("failed to create select stmt for update. rc=%d:%s", rc, strrc(rc));
         return rc;
       }
-      if (static_cast<SelectStmt*>(select_stmt)->query_exprs().size() > 1) {
+      if (static_cast<SelectStmt*>(select_stmt)->query_exprs().size() != 1) {
         rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
-        LOG_WARN("failed to create update statement, more than 1 query exprs", rc, strrc(rc));
+        LOG_WARN("failed to create update statement, not 1 expr", rc, strrc(rc));
         return rc;
       }
       select_map.emplace(i, *static_cast<SelectStmt*>(select_stmt));
