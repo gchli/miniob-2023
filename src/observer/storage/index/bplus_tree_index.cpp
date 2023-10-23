@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/bplus_tree_index.h"
 #include "common/log/log.h"
+#include "storage/common/limits.h"
 #include "storage/record/record_manager.h"
 
 BplusTreeIndex::~BplusTreeIndex() noexcept
@@ -128,10 +129,11 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
             int len = lens_[i];
             AttrType attr_type = types_[i];
             // if any column is null, don't insert into index
-            // if (is_mem_null((void *)(record + off), attr_type, len)) {
-            //   scanner->destroy();
+            if (is_mem_null((void *)(record + off), attr_type, len)) {
+              all_equal = false;
+              // scanner->destroy();
             //   return RC::SUCCESS;
-            // }
+            }
             if (strncmp(record + off, oldrec.data() + off, len) != 0) {
               all_equal = false;
               break;
@@ -145,7 +147,8 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
       } else {
         RID unused_rid;
         rc = scanner->next_entry(&unused_rid);
-        if (rc == RC::SUCCESS) {
+        bool is_null = is_mem_null((void *)(record + field_meta_.offset()), field_meta_.type(), field_meta_.len());
+        if (rc == RC::SUCCESS && !is_null) {
           scanner->destroy();
           return RC::RECORD_DUPLICATE_KEY;
         }
