@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by WangYunlai on 2023/06/28.
 //
 
+#include <cmath>
 #include <sstream>
 #include "common/date.h"
 #include "common/rc.h"
@@ -292,7 +293,7 @@ RC Value::convert_to(AttrType type) {
     float val = get_float();
     switch (type) {
       case INTS: {
-        set_int((int)val);
+        set_int(std::round(val));
       } break;
       case CHARS: {
         set_string(common::double_to_str(val).c_str());
