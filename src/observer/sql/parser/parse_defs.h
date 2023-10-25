@@ -75,6 +75,10 @@ enum CompOp
   STR_NOT_LIKE,  ///< "NOT LIKE",
   IS,            ///< "IS"
   IS_NOT,        ///< "IS NOT"
+  IN,            ///< "IN"
+  IN_NOT,        ///< "NOT IN",
+  EXIST,         ///< "EXIST",
+  EXIST_NOT,     ///< "NOT EXIST"
   NO_OP
 };
 
@@ -91,17 +95,26 @@ enum CondOp
  * 左边和右边理论上都可以是任意的数据，比如是字段（属性，列），也可以是数值常量。
  * 这个结构中记录的仅仅支持字段和值。
  */
+
+struct SelectSqlNode;
+
 struct ConditionSqlNode
 {
+  int unary_op = 0;
   int left_is_attr;              ///< TRUE if left-hand side is an attribute
                                  ///< 1时，操作符左边是属性名，0时，是属性值
+  int left_is_select = 0;        ///< 1时，操作符左边是select，0时，是属性值/属性名
   Value          left_value;     ///< left-hand side value if left_is_attr = FALSE
   RelAttrSqlNode left_attr;      ///< left-hand side attribute
+  SelectSqlNode *left_select;
   CompOp         comp;           ///< comparison operator
   int            right_is_attr;  ///< TRUE if right-hand side is an attribute
                                  ///< 1时，操作符右边是属性名，0时，是属性值
+  int right_is_select = 0;       ///< 1时，操作符右边是select，0时，是属性值/属性名
   RelAttrSqlNode right_attr;     ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
+  SelectSqlNode *right_select;
+  std::vector<Value> values;
 };
 
 /**

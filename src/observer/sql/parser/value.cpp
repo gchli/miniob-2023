@@ -293,7 +293,7 @@ RC Value::convert_to(AttrType type) {
     float val = get_float();
     switch (type) {
       case INTS: {
-        set_int(std::round(val));
+        set_int(round(val));
       } break;
       case CHARS: {
         set_string(common::double_to_str(val).c_str());

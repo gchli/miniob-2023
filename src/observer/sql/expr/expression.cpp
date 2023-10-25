@@ -180,6 +180,22 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   Value left_value;
   Value right_value;
 
+  if (comp_ == IN || comp_ == IN_NOT) {
+    const auto &values = dynamic_cast<ValuesExpr*>(right_.get())->values();
+    bool in = false;
+    for (const auto right_value : values) {
+      bool result = false;
+      RC rc = left_->get_value(tuple, left_value);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+        return rc;
+      }
+      if (left_value.compare(right_value) == 0) in = true;
+    }
+    value.set_boolean(in ? (comp_ == IN) : (comp_ == IN_NOT));
+    return RC::SUCCESS;
+  }
+
   RC rc = left_->get_value(tuple, left_value);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));

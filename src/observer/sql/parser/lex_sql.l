@@ -130,6 +130,8 @@ JOIN                                    RETURN_TOKEN(JOIN);
 ORDER                                   RETURN_TOKEN(ORDER);
 BY                                      RETURN_TOKEN(BY);
 ASC                                     RETURN_TOKEN(ASC);
+IN                                      RETURN_TOKEN(IN_T);
+EXIST                                   RETURN_TOKEN(EXIST_T);
 
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
