@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/select_stmt.h"
 #include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/parser/value.h"
 #include "sql/stmt/filter_stmt.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -25,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 
 SelectStmt::~SelectStmt()
@@ -131,6 +133,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
   // collect query expressions
   std::vector<shared_ptr<Expression>> query_exprs;
+
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
@@ -148,7 +151,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         const FieldMeta *field_meta = table->table_meta().field(field_name);
         if (nullptr == field_meta) {
           if ((0 == strcmp(field_name, "*"))) {
-            field_meta = new FieldMeta();
+            field_meta = new FieldMeta("*");
           } else {
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
             return RC::SCHEMA_FIELD_MISSING;
@@ -165,7 +168,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
         if (nullptr == field_meta) {
           if ((0 == strcmp(field_name, "*"))) {
-            field_meta = new FieldMeta();
+            field_meta = new FieldMeta("*");
           } else {
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
             return RC::SCHEMA_FIELD_MISSING;
@@ -318,10 +321,80 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       group_by_exprs_.emplace_back(make_shared<FieldExpr>(table, field_meta));
     }
   }
-
+  Table *table = default_table;
   // create having statement
-  FilterStmt *having_stmt = nullptr;
+  FilterStmt                         *having_stmt = nullptr;
+  std::vector<shared_ptr<Expression>> having_exprs;
   if (!select_sql.havings.empty()) {
+    for (const auto &cond : select_sql.havings) {
+      if (cond.left_is_attr && cond.left_attr.is_aggr) {
+        AggrType         aggr_type  = cond.left_attr.aggr_type;
+        string           table_name = cond.left_attr.relation_name;
+        string           field_name = cond.left_attr.attribute_name;
+        const FieldMeta *field_meta = nullptr;
+        if (!common::is_blank(table_name.c_str())) {
+          auto iter = table_map.find(table_name);
+          if (iter == table_map.end()) {
+            LOG_WARN("no such table in from list: %s", table_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          table = iter->second;
+        } else {
+          if (table_map.size() != 1) {
+            LOG_WARN("table size should be 1 for xx by stmt.");
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+        if (0 == strcmp(field_name.c_str(), "*")) {
+          if (aggr_type != COUNT_T) {
+            return RC::INVALID_ARGUMENT;
+          }
+          field_meta = new FieldMeta("*");
+        } else {
+          field_meta = table->table_meta().field(field_name.c_str());
+          if (nullptr == field_meta) {
+            LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+        having_exprs.emplace_back(make_shared<AggregateExpr>(cond.left_attr.aggr_type, table, field_meta));
+      }
+
+      if (cond.right_is_attr && cond.right_attr.is_aggr) {
+        AggrType         aggr_type  = cond.right_attr.aggr_type;
+        string           table_name = cond.right_attr.relation_name;
+        string           field_name = cond.right_attr.attribute_name;
+        Table           *table      = default_table;
+        const FieldMeta *field_meta = nullptr;
+        if (!common::is_blank(table_name.c_str())) {
+          auto iter = table_map.find(table_name);
+          if (iter == table_map.end()) {
+            LOG_WARN("no such table in from list: %s", table_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          table = iter->second;
+        } else {
+          if (table_map.size() != 1) {
+            LOG_WARN("table size should be 1 for xx by stmt.");
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+        if (0 == strcmp(field_name.c_str(), "*")) {
+          if (aggr_type != COUNT_T) {
+            return RC::INVALID_ARGUMENT;
+          }
+          field_meta = new FieldMeta("*");
+        } else {
+          field_meta = table->table_meta().field(field_name.c_str());
+          if (nullptr == field_meta) {
+            LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+        }
+        having_exprs.emplace_back(make_shared<AggregateExpr>(cond.right_attr.aggr_type, table, field_meta));
+      }
+    }
+
     RC rc = FilterStmt::create(db,
         default_table,
         &table_map,
@@ -344,6 +417,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->order_by_stmts_.swap(order_by_stmts);
   select_stmt->group_by_exprs_.swap(group_by_exprs_);
   select_stmt->having_stmt_ = having_stmt;
-  stmt                      = select_stmt;
+  select_stmt->having_exprs_.swap(having_exprs);
+  stmt = select_stmt;
   return RC::SUCCESS;
 }
