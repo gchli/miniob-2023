@@ -51,12 +51,18 @@ public:
   const std::vector<shared_ptr<JoinStmt>>    &join_stmts() const { return join_stmts_; }
   const std::vector<shared_ptr<OrderByStmt>> &order_by_stmts() const { return order_by_stmts_; }
   FilterStmt                                 *filter_stmt() const { return filter_stmt_; }
+  FilterStmt                                 *having_stmt() const { return having_stmt_; }
+  std::vector<shared_ptr<Expression>>        &group_by_exprs() { return group_by_exprs_; }
 
 private:
+  static RC check_table_and_filed_no_star(std::unordered_map<std::string, Table *> &table_map, const char *table_name,
+      const char *field_name, Table *default_table);
   std::vector<shared_ptr<Expression>> query_exprs_;  // try to convert from query_fields to query_exprs
   // std::vector<Field>                  query_fields_;
   std::vector<Table *>                 tables_;
   FilterStmt                          *filter_stmt_ = nullptr;
   std::vector<shared_ptr<JoinStmt>>    join_stmts_;
   std::vector<shared_ptr<OrderByStmt>> order_by_stmts_;
+  std::vector<shared_ptr<Expression>>  group_by_exprs_;
+  FilterStmt                          *having_stmt_ = nullptr;
 };

@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/expr/expression.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/expr/expression.h"
 #include "sql/optimizer/logical_plan_generator.h"
 #include "sql/optimizer/physical_plan_generator.h"
 #include "sql/parser/parse_defs.h"
@@ -26,6 +28,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/select_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include <memory>
 #include <memory>
 #include <vector>
 
@@ -92,32 +95,71 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
   AttrType left_type;
   AttrType right_type;
 
-  bool is_left_values = filter_unit.left().is_values;
+  bool is_left_values  = filter_unit.left().is_values;
   bool is_right_values = filter_unit.right().is_values;
   if (is_left_values && filter_unit.left().values_.size() > 0) {
     return false;
   }
-  
+
   CompOp comp = filter_unit.comp();
   if (comp == IN || comp == IN_NOT) {
-    if (is_left_values && is_right_values) return false;
+    if (is_left_values && is_right_values)
+      return false;
     return true;
   } else if (comp == EXIST || comp == EXIST_NOT) {
     return false;
   } else {
-    if (is_left_values && filter_unit.left().values_.size() != 1) return false;
-    if (is_right_values && filter_unit.right().values_.size() != 1) return false;
+    if (is_left_values && filter_unit.left().values_.size() != 1)
+      return false;
+    if (is_right_values && filter_unit.right().values_.size() != 1)
+      return false;
   }
 
   bool is_left_attr  = filter_unit.left().is_attr;
   bool is_right_attr = filter_unit.right().is_attr;
+  bool is_left_expr  = filter_unit.left().is_expr;
+  bool is_right_expr = filter_unit.right().is_expr;
 
-  auto get_filer_obj_type = [](const FilterObj &obj, bool is_attr) {
+  auto get_filer_obj_expr_type = [](const FilterObj &obj) {
+    const auto &expr = obj.expression;
+    if (expr->type() == ExprType::AGGREGATE) {
+      const auto &aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
+
+      if (aggr_expr->aggregate_type() == AVG_T) {
+        return FLOATS;
+      } else if (aggr_expr->aggregate_type() == COUNT_T) {
+        return INTS;
+      } else {
+        return aggr_expr->field().attr_type();
+      }
+    }
+    return obj.field.attr_type();
+  };
+
+  auto get_filer_obj_type = [&](const FilterObj &obj, bool is_attr, bool is_expr) {
+    if (is_expr) {
+      return get_filer_obj_expr_type(obj);
+    }
     return is_attr ? obj.field.attr_type() : obj.value.attr_type();
   };
-  left_type = is_left_values ? filter_unit.left().values_[0].attr_type() : get_filer_obj_type(filter_unit.left(), is_left_attr);
-  right_type = is_right_values ? filter_unit.right().values_[0].attr_type() : get_filer_obj_type(filter_unit.right(), is_right_attr);
+  left_type  = is_left_values ? filter_unit.left().values_[0].attr_type()
+                              : get_filer_obj_type(filter_unit.left(), is_left_attr, is_left_expr);
+  right_type = is_right_values ? filter_unit.right().values_[0].attr_type()
+                               : get_filer_obj_type(filter_unit.right(), is_right_attr, is_right_expr);
 
+  // if (left_type == UNDEFINED || right_type == UNDEFINED) {
+  //   return true;
+  // }
+  // // todo: 在compare的时候会做类型转换，或许这里不需要了
+  // if (left_type == right_type)
+  //   return true;
+  // if (left_type == INTS) {
+  //   if (right_type == DATES)
+  //     return false;
+  // } else if (left_type == FLOATS) {
+  //   if (right_type == DATES)
+  //     return false;
+  // }
   // 均为attr类型，可能同时为DATES类型
   if (left_type == DATES && right_type == DATES) {
     return true;
@@ -199,7 +241,13 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       return rc;
     }
     FilterObj filter_obj;
-    filter_obj.init_attr(Field(table, field));
+    if (condition.left_attr.is_aggr) {
+      AggrType aggr_type = condition.left_attr.aggr_type;
+      filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+    } else {
+      filter_obj.init_attr(Field(table, field));
+    }
+
     filter_unit->set_left(filter_obj);
   } else {
     FilterObj filter_obj;
@@ -220,7 +268,7 @@ right:
         LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
         return rc;
       }
-      
+
       rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
       if (rc != RC::SUCCESS) {
         LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
@@ -257,7 +305,12 @@ right:
       return rc;
     }
     FilterObj filter_obj;
-    filter_obj.init_attr(Field(table, field));
+    if (condition.left_attr.is_aggr) {
+      AggrType aggr_type = condition.left_attr.aggr_type;
+      filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+    } else {
+      filter_obj.init_attr(Field(table, field));
+    }
     filter_unit->set_right(filter_obj);
   } else {
     FilterObj filter_obj;
@@ -275,16 +328,17 @@ right:
   return rc;
 }
 
-RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_cell_need) {
+RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_cell_need)
+{
   unique_ptr<LogicalOperator> logical_oper;
-  LogicalPlanGenerator logical_plan_generator;
-  RC rc = RC::SUCCESS;
-  rc = logical_plan_generator.create(select_stmt, logical_oper);
+  LogicalPlanGenerator        logical_plan_generator;
+  RC                          rc = RC::SUCCESS;
+  rc                             = logical_plan_generator.create(select_stmt, logical_oper);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create logical plan. rc=%s", strrc(rc));
     return rc;
   }
-  PhysicalPlanGenerator physical_plan_generator;
+  PhysicalPlanGenerator        physical_plan_generator;
   unique_ptr<PhysicalOperator> physical_oper;
   rc = physical_plan_generator.create(*logical_oper, physical_oper);
   if (rc != RC::SUCCESS) {
@@ -298,7 +352,7 @@ RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_c
   }
   while (physical_oper->next() == RC::SUCCESS) {
     Tuple *tuple = physical_oper->current_tuple();
-    Value value;
+    Value  value;
     if (single_cell_need && tuple->cell_num() != 1) {
       return RC::INVALID_ARGUMENT;
     }

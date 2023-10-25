@@ -35,10 +35,10 @@
    are private implementation details.  Do not rely on them.  */
 
 #ifndef YY_YY_YACC_SQL_HPP_INCLUDED
-# define YY_YY_YACC_SQL_HPP_INCLUDED
+#define YY_YY_YACC_SQL_HPP_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
-# define YYDEBUG 0
+#define YYDEBUG 0
 #endif
 #if YYDEBUG
 extern int yydebug;
@@ -46,127 +46,124 @@ extern int yydebug;
 
 /* Token type.  */
 #ifndef YYTOKENTYPE
-# define YYTOKENTYPE
-  enum yytokentype
-  {
-    SEMICOLON = 258,
-    CREATE = 259,
-    DROP = 260,
-    TABLE = 261,
-    TABLES = 262,
-    INDEX = 263,
-    CALC = 264,
-    SELECT = 265,
-    DESC = 266,
-    SHOW = 267,
-    SYNC = 268,
-    INSERT = 269,
-    DELETE = 270,
-    UPDATE = 271,
-    LBRACE = 272,
-    RBRACE = 273,
-    COMMA = 274,
-    TRX_BEGIN = 275,
-    TRX_COMMIT = 276,
-    TRX_ROLLBACK = 277,
-    INT_T = 278,
-    STRING_T = 279,
-    FLOAT_T = 280,
-    DATE_T = 281,
-    HELP = 282,
-    EXIT = 283,
-    DOT = 284,
-    INTO = 285,
-    VALUES = 286,
-    FROM = 287,
-    WHERE = 288,
-    AND = 289,
-    OR = 290,
-    SET = 291,
-    ON = 292,
-    LOAD = 293,
-    DATA = 294,
-    INFILE = 295,
-    EXPLAIN = 296,
-    EQ = 297,
-    LT = 298,
-    GT = 299,
-    LE = 300,
-    GE = 301,
-    NE = 302,
-    MAX = 303,
-    MIN = 304,
-    AVG = 305,
-    SUM = 306,
-    COUNT = 307,
-    LIKE = 308,
-    NOT = 309,
-    UNIQUE = 310,
-    NULL_T = 311,
-    IS_T = 312,
-    INNER = 313,
-    JOIN = 314,
-    ORDER = 315,
-    BY = 316,
-    ASC = 317,
-    IN_T = 318,
-    EXIST_T = 319,
-    NUMBER = 320,
-    FLOAT = 321,
-    ID = 322,
-    SSS = 323,
-    UMINUS = 324
-  };
+#define YYTOKENTYPE
+enum yytokentype
+{
+  SEMICOLON    = 258,
+  CREATE       = 259,
+  DROP         = 260,
+  TABLE        = 261,
+  TABLES       = 262,
+  INDEX        = 263,
+  CALC         = 264,
+  SELECT       = 265,
+  DESC         = 266,
+  SHOW         = 267,
+  SYNC         = 268,
+  INSERT       = 269,
+  DELETE       = 270,
+  UPDATE       = 271,
+  LBRACE       = 272,
+  RBRACE       = 273,
+  COMMA        = 274,
+  TRX_BEGIN    = 275,
+  TRX_COMMIT   = 276,
+  TRX_ROLLBACK = 277,
+  INT_T        = 278,
+  STRING_T     = 279,
+  FLOAT_T      = 280,
+  DATE_T       = 281,
+  HELP         = 282,
+  EXIT         = 283,
+  DOT          = 284,
+  INTO         = 285,
+  VALUES       = 286,
+  FROM         = 287,
+  WHERE        = 288,
+  AND          = 289,
+  OR           = 290,
+  SET          = 291,
+  ON           = 292,
+  LOAD         = 293,
+  DATA         = 294,
+  INFILE       = 295,
+  EXPLAIN      = 296,
+  EQ           = 297,
+  LT           = 298,
+  GT           = 299,
+  LE           = 300,
+  GE           = 301,
+  NE           = 302,
+  MAX          = 303,
+  MIN          = 304,
+  AVG          = 305,
+  SUM          = 306,
+  COUNT        = 307,
+  LIKE         = 308,
+  NOT          = 309,
+  UNIQUE       = 310,
+  NULL_T       = 311,
+  IS_T         = 312,
+  INNER        = 313,
+  JOIN         = 314,
+  ORDER        = 315,
+  BY           = 316,
+  ASC          = 317,
+  NUMBER       = 318,
+  FLOAT        = 319,
+  ID           = 320,
+  SSS          = 321,
+  UMINUS       = 322
+};
 #endif
 
 /* Value type.  */
-#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
+#if !defined YYSTYPE && !defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
 #line 121 "yacc_sql.y"
 
-  ParsedSqlNode *                   sql_node;
-  ConditionSqlNode *                condition;
-  Value *                           value;
-  enum CompOp                       comp;
-  enum CondOp                       join_op;
-  enum AggrType                     aggr_t;
-  enum OrderType                    order_t;
-  RelAttrSqlNode *                  aggr_func;
-  RelAttrSqlNode *                  rel_attr;
-  std::vector<AttrInfoSqlNode> *    attr_infos;
-  AttrInfoSqlNode *                 attr_info;
-  Expression *                      expression;
-  std::vector<Expression *> *       expression_list;
-  std::vector<Value> *              value_list;
-  std::vector<std::vector<Value>> * insert_list;
-  std::vector<ConditionSqlNode> *   condition_list;
-  std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
-  std::vector<std::string> *        attribute_list;
-  std::vector<UpdateListSqlNode> *  update_list;
-  UpdateListSqlNode *               update_pair;
-  InnerJoinSqlNode *                inner_join;
-  SelectSqlNode *                   select_body;
-  std::vector<InnerJoinSqlNode> *   inner_join_list;
-  OrderBySqlNode *                  order_by_attr;
-  std::vector<OrderBySqlNode> *     order_by_list;
-  char *                            string;
-  int                               number;
-  float                             floats;
-  bool                              is_null;
+  ParsedSqlNode                   *sql_node;
+  ConditionSqlNode                *condition;
+  Value                           *value;
+  enum CompOp                      comp;
+  enum CondOp                      join_op;
+  enum AggrType                    aggr_t;
+  enum OrderType                   order_t;
+  RelAttrSqlNode                  *aggr_func;
+  RelAttrSqlNode                  *rel_attr;
+  std::vector<AttrInfoSqlNode>    *attr_infos;
+  AttrInfoSqlNode                 *attr_info;
+  Expression                      *expression;
+  std::vector<Expression *>       *expression_list;
+  std::vector<Value>              *value_list;
+  std::vector<std::vector<Value>> *insert_list;
+  std::vector<ConditionSqlNode>   *condition_list;
+  std::vector<RelAttrSqlNode>     *rel_attr_list;
+  std::vector<std::string>        *relation_list;
+  std::vector<std::string>        *attribute_list;
+  std::vector<UpdateListSqlNode>  *update_list;
+  UpdateListSqlNode               *update_pair;
+  InnerJoinSqlNode                *inner_join;
+  SelectSqlNode                   *select_body;
+  std::vector<InnerJoinSqlNode>   *inner_join_list;
+  OrderBySqlNode                  *order_by_attr;
+  std::vector<OrderBySqlNode>     *order_by_list;
+  char                            *string;
+  int                              number;
+  float                            floats;
+  bool                             is_null;
 
 #line 160 "yacc_sql.hpp"
-
 };
 typedef union YYSTYPE YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
-# define YYSTYPE_IS_DECLARED 1
+#define YYSTYPE_IS_TRIVIAL 1
+#define YYSTYPE_IS_DECLARED 1
 #endif
 
 /* Location type.  */
-#if ! defined YYLTYPE && ! defined YYLTYPE_IS_DECLARED
-typedef struct YYLTYPE YYLTYPE;
+#if !defined YYLTYPE && !defined YYLTYPE_IS_DECLARED
+typedef struct YYLTYPE           YYLTYPE;
 struct YYLTYPE
 {
   int first_line;
@@ -174,12 +171,10 @@ struct YYLTYPE
   int last_line;
   int last_column;
 };
-# define YYLTYPE_IS_DECLARED 1
-# define YYLTYPE_IS_TRIVIAL 1
+#define YYLTYPE_IS_DECLARED 1
+#define YYLTYPE_IS_TRIVIAL 1
 #endif
 
-
-
-int yyparse (const char * sql_string, ParsedSqlResult * sql_result, void * scanner);
+int yyparse(const char *sql_string, ParsedSqlResult *sql_result, void *scanner);
 
 #endif /* !YY_YY_YACC_SQL_HPP_INCLUDED  */

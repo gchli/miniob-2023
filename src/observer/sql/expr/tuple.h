@@ -14,10 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 #include <string>
 
+#include "common/hash.h"
 #include "common/log/log.h"
 #include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse.h"
@@ -112,7 +114,8 @@ public:
     }
     return str;
   }
-  virtual Tuple *copy() const { return nullptr; }
+  virtual Tuple      *copy() const { return nullptr; }
+  virtual std::string alias() const { return ""; }
 };
 
 /**
@@ -217,6 +220,7 @@ private:
  * 投影也可以是很复杂的操作，比如某些字段需要做类型转换、重命名、表达式运算、函数计算等。
  * 当前的实现是比较简单的，只是选择部分字段，不做任何其他操作。
  */
+class ProjectTupleHash;
 class ProjectTuple : public Tuple
 {
 public:
@@ -224,9 +228,26 @@ public:
   virtual ~ProjectTuple()
   {
     for (TupleCellSpec *spec : speces_) {
-      delete spec;
+      // delete spec;
     }
     speces_.clear();
+  }
+  bool operator==(const ProjectTuple &other) const
+  {
+    Value value;
+    this->cell_at(0, value);
+    hash_t this_ret = HashUtil::HashOneCell(value);
+    for (int i = 1; i < this->cell_num(); i++) {
+      this->cell_at(i, value);
+      this_ret = HashUtil::CombineHashes(this_ret, HashUtil::HashOneCell(value));
+    }
+    other.cell_at(0, value);
+    hash_t other_ret = HashUtil::HashOneCell(value);
+    for (int i = 1; i < other.cell_num(); i++) {
+      other.cell_at(i, value);
+      other_ret = HashUtil::CombineHashes(other_ret, HashUtil::HashOneCell(value));
+    }
+    return this_ret == other_ret;
   }
 
   void set_tuple(Tuple *tuple) { this->tuple_ = tuple; }
@@ -253,7 +274,7 @@ public:
     ProjectTuple *new_tuple = new ProjectTuple();
     new_tuple->tuple_       = tuple_->copy();
     for (const TupleCellSpec *spec : speces_) {
-      new_tuple->add_cell_spec(new TupleCellSpec(*spec));
+      new_tuple->add_cell_spec(new TupleCellSpec(spec->table_name(), spec->field_name(), spec->alias()));
     }
     return new_tuple;
   }
@@ -276,7 +297,8 @@ class ExpressionTuple : public Tuple
 {
 public:
   ExpressionTuple(std::vector<std::unique_ptr<Expression>> &expressions) : expressions_(expressions) {}
-
+  ExpressionTuple(const ExpressionTuple &other) : expressions_(other.expressions_) {}
+  ExpressionTuple(const ExpressionTuple &&other) : expressions_(other.expressions_) {}
   virtual ~ExpressionTuple() {}
 
   int cell_num() const override { return expressions_.size(); }
@@ -294,6 +316,7 @@ public:
 
   RC find_cell(const TupleCellSpec &spec, Value &cell) const override
   {
+    string alias = spec.field_name() + string(".") + spec.table_name();
     for (const std::unique_ptr<Expression> &expr : expressions_) {
       if (0 == strcmp(spec.alias(), expr->name().c_str())) {
         return expr->try_get_value(cell);
@@ -335,6 +358,7 @@ public:
     cell = cells_[index];
     return RC::SUCCESS;
   }
+  void   add_cell(const Value &cell) { cells_.push_back(cell); }
   Tuple *copy() const override
   {
     ValueListTuple *new_tuple = new ValueListTuple();
@@ -405,4 +429,20 @@ public:
 private:
   Tuple *left_  = nullptr;
   Tuple *right_ = nullptr;
+};
+
+class ProjectTupleHash
+{
+public:
+  hash_t operator()(const ProjectTuple &tuple) const
+  {
+    Value value;
+    tuple.cell_at(0, value);
+    hash_t ret = HashUtil::HashOneCell(value);
+    for (size_t i = 1; i < tuple.cell_num(); i++) {
+      tuple.cell_at(i, value);
+      ret = HashUtil::CombineHashes(ret, HashUtil::HashOneCell(value));
+    }
+    return ret;
+  }
 };
