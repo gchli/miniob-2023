@@ -114,6 +114,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         ORDER
         BY
         ASC
+        IN_T
+        EXIST_T
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -1005,6 +1007,77 @@ condition:
       delete $1;
       delete $3;
     }
+    | value comp_op LBRACE select_body RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_select = 1;
+      $$->right_select = $4;
+      $$->comp = $2;
+      delete $1;
+    }
+    | rel_attr comp_op LBRACE select_body RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_select = 1;
+      $$->right_select = $4;
+      $$->comp = $2;
+      delete $1;
+    }
+    | LBRACE select_body RBRACE comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_select = 1;
+      $$->left_select = $2;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$5;
+      $$->comp = $4;
+      delete $5;
+    }
+    | LBRACE select_body RBRACE comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_select = 1;
+      $$->left_select = $2;
+      $$->right_is_attr = 0;
+      $$->right_value = *$5;
+      $$->comp = $4;
+      delete $5;
+    }
+    | LBRACE select_body RBRACE comp_op LBRACE select_body RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_select = 1;
+      $$->left_select = $2;
+      $$->right_is_select = 1;
+      $$->right_select = $6;
+      $$->comp = $4;
+    }
+    | comp_op LBRACE select_body RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_select = 0;
+      $$->right_is_select = 1;
+      $$->right_select = $3;
+      $$->comp = $1;
+      $$->unary_op = 1;
+    }
+    | rel_attr comp_op LBRACE value value_list RBRACE
+    {
+      // HERE
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_select = 1;
+      $$->comp = $2;
+      $$->values.swap(*$5);
+      $$->values.emplace_back(*$4);
+      std::reverse($$->values.begin(), $$->values.end());
+      delete $5;
+    }
     ;
 
 comp_op:
@@ -1018,6 +1091,10 @@ comp_op:
     | NOT LIKE { $$ = STR_NOT_LIKE; }
     | IS_T { $$ = IS; }
     | IS_T NOT { $$ = IS_NOT; }
+    | IN_T { $$ = IN; }
+    | NOT IN_T { $$ = IN_NOT; }
+    | EXIST_T { $$ = EXIST; }
+    | NOT EXIST_T { $$ = EXIST_NOT; }
     ;
 
 load_data_stmt:

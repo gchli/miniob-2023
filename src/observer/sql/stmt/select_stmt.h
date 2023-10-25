@@ -47,7 +47,7 @@ public:
 public:
   const std::vector<Table *> &tables() const { return tables_; }
   // const std::vector<Field>                  &query_fields() const { return query_fields_; }
-  const std::vector<shared_ptr<Expression>>  &query_exprs() { return query_exprs_; }
+  const std::vector<shared_ptr<Expression>>  &query_exprs() const { return query_exprs_; }
   const std::vector<shared_ptr<JoinStmt>>    &join_stmts() const { return join_stmts_; }
   const std::vector<shared_ptr<OrderByStmt>> &order_by_stmts() const { return order_by_stmts_; }
   FilterStmt                                 *filter_stmt() const { return filter_stmt_; }

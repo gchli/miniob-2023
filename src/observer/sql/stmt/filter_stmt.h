@@ -17,18 +17,23 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 #include <unordered_map>
 #include "sql/parser/parse_defs.h"
+#include "sql/parser/value.h"
 #include "sql/stmt/stmt.h"
+// #include "sql/stmt/select_stmt.h"
 #include "sql/expr/expression.h"
 
 class Db;
 class Table;
 class FieldMeta;
+class SelectStmt;
 
 struct FilterObj
 {
   bool  is_attr;
+  bool  is_values = false;
   Field field;
   Value value;
+  std::vector<Value> values_;
 
   void init_attr(const Field &field)
   {
@@ -40,6 +45,12 @@ struct FilterObj
   {
     is_attr     = false;
     this->value = value;
+  }
+
+  void init_values(std::vector<Value> &&values)
+  {
+    is_values = true;
+    values_ = std::move(values);
   }
 };
 
@@ -89,3 +100,27 @@ private:
   static bool               check_comparable(FilterUnit &filter_unit);
   std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
 };
+
+RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_cell_need);
+
+inline FilterUnit create_equal_filter_unit() {
+  FilterUnit filter_unit;
+  FilterObj left_obj;
+  left_obj.init_value(Value{1});
+  filter_unit.set_left(left_obj);
+  FilterObj right_obj;
+  filter_unit.set_right(right_obj);
+  filter_unit.set_comp(EQUAL_TO);
+  return filter_unit;
+}
+
+inline FilterUnit create_not_equal_filter_unit() {
+  FilterUnit filter_unit;
+  FilterObj left_obj;
+  left_obj.init_value(Value{1});
+  filter_unit.set_left(left_obj);
+  FilterObj right_obj;
+  filter_unit.set_right(right_obj);
+  filter_unit.set_comp(EQUAL_TO);
+  return filter_unit;
+}

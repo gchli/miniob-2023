@@ -17,14 +17,15 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "sql/expr/tuple_cell.h"
-#include "storage/field/field.h"
+ #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
 
 class Tuple;
-
+class LogicalOperator;
 /**
  * @defgroup Expression
  * @brief 表达式
@@ -46,6 +47,7 @@ enum class ExprType
   ARITHMETIC,   ///< 算术运算
   AGGREGATE,    ///< 聚合函数
   FUNCTION,     ///< 函数
+  SELECT,       ///< 子查询
 };
 
 /**
@@ -161,6 +163,35 @@ public:
 
 private:
   Value value_;
+};
+
+class ValuesExpr : public Expression
+{
+public:
+  ValuesExpr() = default;
+  explicit ValuesExpr(const std::vector<Value> &values) : values_(values) {}
+
+  virtual ~ValuesExpr() = default;
+
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; };
+  RC try_get_value(Value &value) const override
+  {
+    return RC::INVALID_ARGUMENT;
+  }
+
+  ExprType type() const override { return ExprType::VALUE; }
+
+  AttrType value_type() const override { return values_[0].attr_type(); }
+
+  void get_value(Value &value) const { value = value_; }
+
+  const Value &get_value() const { return value_; }
+
+  const std::vector<Value> values() const { return values_; }
+
+private:
+  std::vector<Value> values_;
+  Value value_{};
 };
 
 /**
