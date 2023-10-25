@@ -17,10 +17,11 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "sql/expr/tuple_cell.h"
- #include "storage/field/field.h"
+#include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
 
@@ -174,10 +175,7 @@ public:
   virtual ~ValuesExpr() = default;
 
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; };
-  RC try_get_value(Value &value) const override
-  {
-    return RC::INVALID_ARGUMENT;
-  }
+  RC try_get_value(Value &value) const override { return RC::INVALID_ARGUMENT; }
 
   ExprType type() const override { return ExprType::VALUE; }
 
@@ -191,7 +189,7 @@ public:
 
 private:
   std::vector<Value> values_;
-  Value value_{};
+  Value              value_{};
 };
 
 /**
@@ -354,7 +352,17 @@ public:
   ExprType    type() const override { return ExprType::AGGREGATE; }
   std::string name() const override;
   std::string name(bool with_table) const;
-  AttrType    value_type() const override { return AttrType::INTS; }
+  AttrType    value_type() const override
+  {
+    if (aggregate_type_ == AVG_T) {
+      return FLOATS;
+    } else if (aggregate_type_ == COUNT_T) {
+      return INTS;
+    }
+    return field_.value_type();
+
+    // return AttrType::INTS;
+  }
 
   RC   get_value(const Tuple &tuple, Value &value) const override;
   void set_value(const Value &value) { val_ = value; }
@@ -374,8 +382,7 @@ private:
   AggrType    aggregate_type_;
   FieldExpr   field_;
   std::string alis_;
-  // std::string relation_name_;
-  // std::string file_name_;
+
   Value val_;
 };
 

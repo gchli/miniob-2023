@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "storage/db/db.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include <memory>
 #include <memory>
@@ -147,19 +148,6 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
   right_type = is_right_values ? filter_unit.right().values_[0].attr_type()
                                : get_filer_obj_type(filter_unit.right(), is_right_attr, is_right_expr);
 
-  // if (left_type == UNDEFINED || right_type == UNDEFINED) {
-  //   return true;
-  // }
-  // // todo: 在compare的时候会做类型转换，或许这里不需要了
-  // if (left_type == right_type)
-  //   return true;
-  // if (left_type == INTS) {
-  //   if (right_type == DATES)
-  //     return false;
-  // } else if (left_type == FLOATS) {
-  //   if (right_type == DATES)
-  //     return false;
-  // }
   // 均为attr类型，可能同时为DATES类型
   if (left_type == DATES && right_type == DATES) {
     return true;
@@ -235,10 +223,18 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   } else if (condition.left_is_attr) {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc                     = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
+
+    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
-      return rc;
+      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
+        table = default_table;
+        field = new FieldMeta("*");
+        rc    = RC::SUCCESS;
+      }
+      if (table == nullptr || field == nullptr) {
+        LOG_WARN("cannot find attr");
+        return rc;
+      }
     }
     FilterObj filter_obj;
     if (condition.left_attr.is_aggr) {
@@ -301,8 +297,15 @@ right:
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
-      return rc;
+      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
+        table = default_table;
+        field = new FieldMeta("*");
+        rc    = RC::SUCCESS;
+      }
+      if (table == nullptr || field == nullptr) {
+        LOG_WARN("cannot find attr");
+        return rc;
+      }
     }
     FilterObj filter_obj;
     if (condition.left_attr.is_aggr) {

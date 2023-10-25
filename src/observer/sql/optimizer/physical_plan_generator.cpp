@@ -277,7 +277,7 @@ RC PhysicalPlanGenerator::create_plan(AggregateLogicalOperator &aggr_oper, uniqu
 
   aggr_operator->set_group_by_exprs(aggr_oper.get_group_by());
   aggr_operator->set_having_stmt(aggr_oper.get_having());
-
+  aggr_operator->set_having_exprs(aggr_oper.get_having_exprs());
   oper = unique_ptr<PhysicalOperator>(aggr_operator);
 
   LOG_TRACE("create a project physical operator");

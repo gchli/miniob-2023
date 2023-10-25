@@ -26,6 +26,7 @@ Aggregator::Aggregator(shared_ptr<AggregateExpr> expr) : Aggregator(expr.get()) 
 void Aggregator::add_tuple(Tuple *tuple)
 {
   bool is_star = (field_.attr_type() == AttrType::UNDEFINED);
+
   if (is_star) {
     assert(aggr_type_ == COUNT_T);
     count_++;
@@ -153,6 +154,7 @@ RC AggregatePhysicalOperator::open(Trx *trx)
   }
   // todo(ligch): 目前应该只有aggr_exprs, 之后需要扩展
   std::vector<shared_ptr<AggregateExpr>> aggr_exprs;
+  std::vector<shared_ptr<AggregateExpr>> having_aggr_exprs;
   // std::vector<shared_ptr<FieldExpr>>     field_exprs;
   for (const auto &expr : aggr_exprs_) {
     if (expr->type() == ExprType::AGGREGATE) {
@@ -163,6 +165,14 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       aggr_exprs.push_back(converted_field_expr);
     }
   }
+  for (const auto &expr : having_exprs_) {
+    if (expr->type() == ExprType::AGGREGATE) {
+      having_aggr_exprs.push_back(dynamic_pointer_cast<AggregateExpr>(expr));
+    } else if (expr->type() == ExprType::FIELD) {
+      LOG_ERROR("shouldn't happen.");
+    }
+  }
+
   bool has_group_by = !group_by_exprs_.empty();
   if (!has_group_by) {
     for (const auto &expr : aggr_exprs) {
@@ -222,14 +232,20 @@ RC AggregatePhysicalOperator::open(Trx *trx)
 
         group_by_tables_[proj_tuple].add_expr(expr);
       }
-      // group_by_tables_[proj_tuple] = new_aggr_table;
+
+      if (!having_exprs_.empty()) {
+        for (const auto &expr : having_aggr_exprs) {
+          if (expr->aggregate_type() == FIELD_T)
+            continue;
+
+          group_by_tables_[proj_tuple].add_expr(expr);
+        }
+      }
     }
     if (group_by_tables_.find(proj_tuple) == group_by_tables_.end()) {
       LOG_WARN("shouldn't happen.");
     }
     group_by_tables_[proj_tuple].add_tuple(cur_tuple);
-    // auto &cur_aggr_table = group_by_tables_[proj_tuple];
-    // cur_aggr_table.add_tuple(cur_tuple);
   }
 
   // get result from aggregation table and put them into result_tuples_
@@ -239,7 +255,7 @@ RC AggregatePhysicalOperator::open(Trx *trx)
     aggr_exprs_output_vec_.push_back(make_shared<vector<std::unique_ptr<Expression>>>());
 
     auto &aggr_exprs_output = aggr_exprs_output_vec_[aggr_exprs_output_vec_.size() - 1];
-
+    auto  tmp_exprs_output  = make_shared<vector<std::unique_ptr<Expression>>>();
     for (const auto &expr : aggr_exprs) {
       Value val;
       if (expr->aggregate_type() == FIELD_T) {
@@ -250,11 +266,23 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
       aggr_expr_output->set_value(val);
       aggr_exprs_output->push_back(std::move(aggr_expr_output));
+
+      auto tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      tmp_expr_output->set_value(val);
+      tmp_exprs_output->push_back(std::move(tmp_expr_output));
+    }
+    for (const auto &expr : having_aggr_exprs) {
+      Value val             = cur_aggr_table.get_result(expr);
+      auto  tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      tmp_expr_output->set_value(val);
+      tmp_exprs_output->push_back(std::move(tmp_expr_output));
     }
     shared_ptr<Tuple> expr_tuple = make_shared<ExpressionTuple>(*aggr_exprs_output);
 
     if (having_stmt_) {
-      if (is_tuple_valid(*expr_tuple, having_stmt_)) {
+      shared_ptr<Tuple> tmp_expr_tuple = make_shared<ExpressionTuple>(*tmp_exprs_output);
+      // if (is_tuple_valid(*expr_tuple, having_stmt_)) {
+      if (is_tuple_valid(*tmp_expr_tuple, having_stmt_)) {
         result_tuples_.emplace_back(std::move(expr_tuple));
       }
     } else {

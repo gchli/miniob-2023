@@ -223,6 +223,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
     if (select_stmt->having_stmt() != nullptr) {
       aggr_oper->set_having(select_stmt->having_stmt());
+      aggr_oper->set_having_exprs(select_stmt->having_exprs());
     }
     select_oper = std::move(aggr_oper);
   }

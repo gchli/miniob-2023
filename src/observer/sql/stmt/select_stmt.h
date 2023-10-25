@@ -53,6 +53,7 @@ public:
   FilterStmt                                 *filter_stmt() const { return filter_stmt_; }
   FilterStmt                                 *having_stmt() const { return having_stmt_; }
   std::vector<shared_ptr<Expression>>        &group_by_exprs() { return group_by_exprs_; }
+  std::vector<shared_ptr<Expression>>        &having_exprs() { return having_exprs_; }
 
 private:
   static RC check_table_and_filed_no_star(std::unordered_map<std::string, Table *> &table_map, const char *table_name,
@@ -64,5 +65,7 @@ private:
   std::vector<shared_ptr<JoinStmt>>    join_stmts_;
   std::vector<shared_ptr<OrderByStmt>> order_by_stmts_;
   std::vector<shared_ptr<Expression>>  group_by_exprs_;
-  FilterStmt                          *having_stmt_ = nullptr;
+
+  FilterStmt                         *having_stmt_ = nullptr;
+  std::vector<shared_ptr<Expression>> having_exprs_;
 };

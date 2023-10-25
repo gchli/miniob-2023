@@ -99,6 +99,8 @@ public:
   const std::vector<std::shared_ptr<Expression>> &group_by_exprs() const { return group_by_exprs_; }
   void                         set_having_stmt(shared_ptr<FilterStmt> having_stmt) { having_stmt_ = having_stmt; }
   const shared_ptr<FilterStmt> get_having_stmt() const { return having_stmt_; }
+  void set_having_exprs(std::vector<shared_ptr<Expression>> having_expr) { having_exprs_.swap(having_expr); }
+  const std::vector<std::shared_ptr<Expression>> &get_having_exprs() const { return having_exprs_; }
 
 private:
   bool is_tuple_valid(Tuple &tuple, const shared_ptr<FilterStmt> &filter);
@@ -114,4 +116,5 @@ private:
   Value                                                             val_;
   std::vector<shared_ptr<Expression>>                               group_by_exprs_;
   shared_ptr<FilterStmt>                                            having_stmt_{nullptr};
+  std::vector<shared_ptr<Expression>>                               having_exprs_;
 };

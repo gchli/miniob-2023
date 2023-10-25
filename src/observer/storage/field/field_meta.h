@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/parser/value.h"
 
 namespace Json {
 class Value;
@@ -31,6 +32,7 @@ class FieldMeta
 {
 public:
   FieldMeta();
+  FieldMeta(std::string name) : name_(name){};
   FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, bool nullable);
   ~FieldMeta() = default;
 
@@ -43,6 +45,7 @@ public:
   int         len() const;
   bool        visible() const;
   bool        nullable() const;
+  void        set_name(std::string name) { name_ = name; }
 
 public:
   void desc(std::ostream &os) const;
@@ -53,7 +56,7 @@ public:
 
 protected:
   std::string name_;
-  AttrType    attr_type_;
+  AttrType    attr_type_{AttrType::UNDEFINED};
   int         attr_offset_;
   int         attr_len_;
   bool        visible_;

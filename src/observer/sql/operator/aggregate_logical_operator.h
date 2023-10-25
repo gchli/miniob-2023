@@ -37,14 +37,14 @@ public:
   const std::vector<OrderType>        &order_by_type() const { return order_by_type_; }
   void                   set_having(FilterStmt *havings) { having_stmt_ = shared_ptr<FilterStmt>(havings); }
   shared_ptr<FilterStmt> get_having() const { return having_stmt_; }
+  void set_having_exprs(std::vector<shared_ptr<Expression>> &having_exprs) { having_exprs_.swap(having_exprs); }
+  std::vector<shared_ptr<Expression>> &get_having_exprs() { return having_exprs_; }
 
 private:
   std::vector<shared_ptr<Expression>> aggr_exprs_;
   std::vector<shared_ptr<Expression>> order_by_exprs_;
   std::vector<OrderType>              order_by_type_;
   std::vector<shared_ptr<Expression>> group_by_exprs_;
-  // const std::vector<FilterUnit *>    &havings_;
-  shared_ptr<FilterStmt> having_stmt_{nullptr};
-  // AggrType      aggr_type_;
-  // TupleCellSpec cell_spec_;
+  shared_ptr<FilterStmt>              having_stmt_{nullptr};
+  std::vector<shared_ptr<Expression>> having_exprs_;
 };
