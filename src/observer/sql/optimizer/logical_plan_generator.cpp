@@ -42,6 +42,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include <cassert>
+#include <cstring>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -100,23 +101,45 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   const std::vector<Table *> &tables = select_stmt->tables();
   // const std::vector<Field> &all_fields = select_stmt->query_fields();
-  const auto &all_exprs = select_stmt->query_exprs();
-
+  const auto                         &all_query_exprs = select_stmt->query_exprs();
+  std::vector<shared_ptr<Expression>> query_field_exprs;
+  std::vector<shared_ptr<Expression>> query_aggr_exprs;
   // todo(ligch): 应该结合是否有group by进行判断，放在之后进行优化
-  bool has_aggr = false;
-  auto iter     = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
-    return expr->type() == ExprType::AGGREGATE;
-  });
-  if (iter != all_exprs.end()) {
-    has_aggr = true;
+
+  for (const auto &expr : all_query_exprs) {
+    if (expr->type() == ExprType::AGGREGATE) {
+      query_aggr_exprs.push_back(expr);
+    } else if (expr->type() == ExprType::FIELD) {
+      query_field_exprs.push_back(expr);
+    }
+  }
+  bool has_aggr        = !query_aggr_exprs.empty();
+  bool has_field_query = !query_field_exprs.empty();
+  bool has_group_by    = !select_stmt->group_by_exprs().empty();
+
+  if (has_aggr && has_field_query && !has_group_by) {
+    LOG_WARN("select stmt has both aggregate and non-aggregate exprs and no group by exprs.");
+    return RC::INVALID_ARGUMENT;
   }
 
-  iter = find_if(all_exprs.begin(), all_exprs.end(), [](const shared_ptr<Expression> &expr) {
-    return expr->type() != ExprType::AGGREGATE;
-  });
-  if (has_aggr && (iter != all_exprs.end())) {
-    LOG_WARN("select stmt has both aggregate and non-aggregate exprs.");
-    return RC::INVALID_ARGUMENT;
+  if (has_aggr && has_field_query && has_group_by) {
+    for (const auto &expr : query_field_exprs) {
+      auto iter = find_if(select_stmt->group_by_exprs().begin(),
+          select_stmt->group_by_exprs().end(),
+          [&](shared_ptr<Expression> group_by_expr) {
+            if (expr->type() != group_by_expr->type())
+              return false;
+            if (strcmp(expr->field_name(), group_by_expr->field_name()) != 0)
+              return false;
+            if (strcmp(expr->table_name(), group_by_expr->table_name()) != 0)
+              return false;
+            return true;
+          });
+      if (iter == query_aggr_exprs.end()) {
+        LOG_WARN("select stmt has both aggregate and non-aggregate exprs. query field isn't in group by exprs.");
+        return RC::INVALID_ARGUMENT;
+      }
+    }
   }
 
   const auto &join_exprs = select_stmt->join_stmts();
@@ -131,7 +154,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   if (!has_join) {
     for (Table *table : tables) {
       std::vector<Field> fields;
-      for (const auto &expr : all_exprs) {
+      for (const auto &expr : all_query_exprs) {
         // todo(ligch): add exprtype::func
         if (expr->type() == ExprType::FIELD || expr->type() == ExprType::AGGREGATE) {
           const char *table_name = expr->table_name();
@@ -190,12 +213,18 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     order_by_oper = std::move(make_unique<OrderByLogicalOperator>(select_stmt->order_by_stmts()));
   }
 
-  if (!has_aggr) {
-    auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_exprs));
+  if (!has_aggr && !has_group_by) {
+    auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_query_exprs));
     select_oper    = std::move(proj_oper);
   } else {
-    auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_exprs));
-    select_oper    = std::move(aggr_oper);
+    auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_query_exprs));
+    if (has_group_by) {
+      aggr_oper->set_group_bys(select_stmt->group_by_exprs());
+    }
+    if (select_stmt->having_stmt() != nullptr) {
+      aggr_oper->set_having(select_stmt->having_stmt());
+    }
+    select_oper = std::move(aggr_oper);
   }
 
   if (predicate_oper) {
@@ -208,6 +237,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       select_oper->add_child(std::move(table_oper));
     }
   }
+
   unique_ptr<LogicalOperator> logical_oper;
 
   logical_oper = std::move(select_oper);
@@ -308,9 +338,9 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
-  int col_update = update_stmt->field_metas().size();
+  int                                col_update = update_stmt->field_metas().size();
   std::unordered_map<size_t, size_t> select_oper_map;
-  int oper_cnt = 1;
+  int                                oper_cnt = 1;
 
   for (int i = 0; i < col_update; i++) {
     if (update_stmt->select_map().find(i) != update_stmt->select_map().end()) {
@@ -318,8 +348,8 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     }
   }
 
-  unique_ptr<LogicalOperator> update_oper(
-      new UpdateLogicalOperator(table, std::move(update_stmt->field_metas()), std::move(update_stmt->value_map()), std::move(select_oper_map)));
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(
+      table, std::move(update_stmt->field_metas()), std::move(update_stmt->value_map()), std::move(select_oper_map)));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

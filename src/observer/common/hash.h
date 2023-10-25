@@ -1,10 +1,12 @@
 #pragma once
 
+#include "sql/parser/value.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
+
 using hash_t = std::size_t;
 
 class HashUtil
@@ -22,7 +24,13 @@ public:
     }
     return hash;
   }
-
+  static inline hash_t HashOneCell(const Value &val)
+  {
+    AttrType type      = val.attr_type();
+    size_t   type_hash = HashUtil::Hash(&type);
+    size_t   val_hash  = HashUtil::HashBytes(val.data(), val.length());
+    return HashUtil::CombineHashes(type_hash, val_hash);
+  }
   static inline hash_t CombineHashes(hash_t l, hash_t r)
   {
     hash_t both[2] = {};

@@ -1,13 +1,16 @@
+#include "common/log/log.h"
 #include "common/rc.h"
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/tuple_cell.h"
-#include "sql/operator/aggregate_physical_operator.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "storage/field/field.h"
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <vector>
+#include "sql/operator/aggregate_physical_operator.h"
 
 Aggregator::Aggregator(AggregateExpr *expr)
 {
@@ -30,7 +33,9 @@ void Aggregator::add_tuple(Tuple *tuple)
   }
   Value val;
   RC    rc = tuple->find_cell(TupleCellSpec(field_.table_name(), field_.field_name()), val);
-
+  if (val.is_null()) {
+    return;
+  }
   switch (aggr_type_) {
     case MAX_T: {
       if (val_.is_null()) {
@@ -148,32 +153,115 @@ RC AggregatePhysicalOperator::open(Trx *trx)
   }
   // todo(ligch): 目前应该只有aggr_exprs, 之后需要扩展
   std::vector<shared_ptr<AggregateExpr>> aggr_exprs;
+  // std::vector<shared_ptr<FieldExpr>>     field_exprs;
   for (const auto &expr : aggr_exprs_) {
     if (expr->type() == ExprType::AGGREGATE) {
       aggr_exprs.push_back(dynamic_pointer_cast<AggregateExpr>(expr));
+    } else if (expr->type() == ExprType::FIELD) {
+      shared_ptr<AggregateExpr> converted_field_expr =
+          make_shared<AggregateExpr>(FIELD_T, *dynamic_pointer_cast<FieldExpr>(expr));
+      aggr_exprs.push_back(converted_field_expr);
     }
   }
-
-  for (const auto &expr : aggr_exprs) {
-    if (expr->aggregate_type() != COUNT_T && expr->field().attr_type() == AttrType::UNDEFINED) {
-      return RC::INTERNAL;
+  bool has_group_by = !group_by_exprs_.empty();
+  if (!has_group_by) {
+    for (const auto &expr : aggr_exprs) {
+      if (expr->aggregate_type() != COUNT_T && expr->field().attr_type() == AttrType::UNDEFINED) {
+        return RC::INTERNAL;
+      }
+      if (expr->aggregate_type() == FIELD_T)
+        continue;
+      aggregate_table_.add_expr(expr);
     }
-    aggregate_table_.add_expr(expr);
+
+    while ((rc = child->next()) == RC::SUCCESS) {
+      Tuple *t = child->current_tuple();
+      aggregate_table_.add_tuple(t);
+    }
+    // std::vector<std::unique_ptr<Expression>> aggr_exprs_output_;
+    for (const auto &expr : aggr_exprs) {
+      Value val = aggregate_table_.get_result(expr);
+      expr->set_value(val);
+      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      aggr_expr_output->set_value(val);
+      aggr_exprs_output_.emplace_back(std::move(aggr_expr_output));
+    }
+
+    shared_ptr<Tuple> expr_tuple = make_shared<ExpressionTuple>(aggr_exprs_output_);
+
+    result_tuples_.emplace_back(std::move(expr_tuple));
+    return RC::SUCCESS;
   }
 
   while ((rc = child->next()) == RC::SUCCESS) {
-    Tuple *t = child->current_tuple();
-    aggregate_table_.add_tuple(t);
+    Tuple       *cur_tuple = child->current_tuple()->copy();
+    ProjectTuple proj_tuple;
+    proj_tuple.set_tuple(cur_tuple);
+
+    for (const auto &expr : group_by_exprs_) {
+      // 在有子查询之前应该均为fieldexpr
+      TupleCellSpec *spec = new TupleCellSpec(expr->table_name(), expr->field_name(), expr->name().c_str());
+      proj_tuple.add_cell_spec(spec);
+    }
+
+    for (int i = 0; i < proj_tuple.cell_num(); ++i) {
+      Value val;
+      RC    rc = proj_tuple.cell_at(i, val);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("get value failed.");
+        return rc;
+      }
+    }
+
+    if (group_by_tables_.find(proj_tuple) == group_by_tables_.end()) {
+      group_by_tables_[proj_tuple] = AggregationTable{};
+      // AggregationTable new_aggr_table;
+      for (const auto &expr : aggr_exprs) {
+        if (expr->aggregate_type() == FIELD_T)
+          continue;
+
+        group_by_tables_[proj_tuple].add_expr(expr);
+      }
+      // group_by_tables_[proj_tuple] = new_aggr_table;
+    }
+    if (group_by_tables_.find(proj_tuple) == group_by_tables_.end()) {
+      LOG_WARN("shouldn't happen.");
+    }
+    group_by_tables_[proj_tuple].add_tuple(cur_tuple);
+    // auto &cur_aggr_table = group_by_tables_[proj_tuple];
+    // cur_aggr_table.add_tuple(cur_tuple);
   }
 
-  for (const auto &expr : aggr_exprs) {
-    Value val = aggregate_table_.get_result(expr);
-    expr->set_value(val);
-    aggr_exprs_output_.emplace_back(make_unique<ValueExpr>(val));
+  // get result from aggregation table and put them into result_tuples_
+  for (auto it = group_by_tables_.begin(); it != group_by_tables_.end(); it++) {
+    auto &cur_proj_tuple = it->first;
+    auto &cur_aggr_table = it->second;
+    aggr_exprs_output_vec_.push_back(make_shared<vector<std::unique_ptr<Expression>>>());
+
+    auto &aggr_exprs_output = aggr_exprs_output_vec_[aggr_exprs_output_vec_.size() - 1];
+
+    for (const auto &expr : aggr_exprs) {
+      Value val;
+      if (expr->aggregate_type() == FIELD_T) {
+        expr->get_value(cur_proj_tuple, val);
+      } else {
+        val = cur_aggr_table.get_result(expr);
+      }
+      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      aggr_expr_output->set_value(val);
+      aggr_exprs_output->push_back(std::move(aggr_expr_output));
+    }
+    shared_ptr<Tuple> expr_tuple = make_shared<ExpressionTuple>(*aggr_exprs_output);
+
+    if (having_stmt_) {
+      if (is_tuple_valid(*expr_tuple, having_stmt_)) {
+        result_tuples_.emplace_back(std::move(expr_tuple));
+      }
+    } else {
+      result_tuples_.emplace_back(std::move(expr_tuple));
+    }
   }
-  ExpressionTuple expr_tuple{aggr_exprs_output_};
-  // result_tuples_.reserve(1);
-  result_tuples_.emplace_back(expr_tuple);
+
   return RC::SUCCESS;
 }
 
@@ -184,8 +272,88 @@ RC AggregatePhysicalOperator::next()
   }
   return RC::SUCCESS;
 }
+
 RC AggregatePhysicalOperator::close()
 {
   children_[0]->close();
   return RC::SUCCESS;
+}
+
+bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<FilterStmt> &filter)
+{
+  bool filter_stmt_result = true;
+  for (const auto &filter_unit : filter->filter_units()) {
+    auto  left_filer_obj  = filter_unit->left();
+    auto  right_filer_obj = filter_unit->right();
+    Value left_value, right_value;
+    if (left_filer_obj.is_expr) {
+      const auto &expr = left_filer_obj.expression;
+      if (expr->type() == ExprType::AGGREGATE) {
+        auto          aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
+        TupleCellSpec tuple_spec(aggr_expr->name(true).c_str());
+        tuple.find_cell(tuple_spec, left_value);
+      } else {
+        LOG_WARN("shouldn't have other expr type in filter obj now");
+      }
+    } else if (left_filer_obj.is_attr) {
+      // if (left_filer_obj.)
+      TupleCellSpec left_spec(left_filer_obj.field.table_name(), left_filer_obj.field.field_name());
+      tuple.find_cell(left_spec, left_value);
+    } else {
+      left_value = left_filer_obj.value;
+    }
+
+    if (right_filer_obj.is_expr) {
+      const auto &expr = right_filer_obj.expression;
+      if (expr->type() == ExprType::AGGREGATE) {
+        auto aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
+        RC   rc        = aggr_expr->get_value(tuple, right_value);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("filter obj get value failed.");
+          return false;
+        }
+      } else {
+        LOG_WARN("shouldn't have other expr type in filter obj now");
+      }
+    } else if (right_filer_obj.is_attr) {
+      TupleCellSpec right_spec(right_filer_obj.field.table_name(), right_filer_obj.field.field_name());
+      tuple.find_cell(right_spec, right_value);
+    } else {
+      right_value = right_filer_obj.value;
+    }
+    auto      comp_type     = filter_unit->comp();
+    const int comp_result   = left_value.compare(right_value);
+    bool      filter_result = false;
+    if (left_value.is_null() || right_value.is_null()) {
+      return false;
+    }
+    switch (comp_type) {
+      case EQUAL_TO: {
+        filter_result = (0 == comp_result);
+      } break;
+      case LESS_EQUAL: {
+        filter_result = (comp_result <= 0);
+      } break;
+      case NOT_EQUAL: {
+        filter_result = (comp_result != 0);
+      } break;
+      case LESS_THAN: {
+        filter_result = (comp_result < 0);
+      } break;
+      case GREAT_EQUAL: {
+        filter_result = (comp_result >= 0);
+      } break;
+      case GREAT_THAN: {
+        filter_result = (comp_result > 0);
+      } break;
+      default: {
+        LOG_WARN("invalid compare type: %d", comp_type);
+      } break;
+    }
+    filter_stmt_result = filter_stmt_result && filter_result;
+    if (!filter_stmt_result) {
+      break;
+    }
+  }
+  return filter_stmt_result;
 }

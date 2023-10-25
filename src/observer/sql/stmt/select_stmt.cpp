@@ -122,7 +122,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         LOG_WARN("fail to create filter for join.");
         return rc;
       }
-      table_map.insert(std::pair<std::string, Table *>(table_name, join_table));
+      // table_map.insert(std::pair<std::string, Table *>(table_name, join_table));
       auto join_stmt = make_shared<JoinStmt>(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
       join_stmts.push_back(join_stmt);
       // join_stmts.emplace_back(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
@@ -247,6 +247,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+
   // create order by statements
   std::vector<shared_ptr<OrderByStmt>> order_by_stmts;
   for (int i = 0; i < select_sql.order_bys.size(); i++) {
@@ -255,12 +256,11 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     const char           *table_name    = order_by_node.attr.relation_name.c_str();
     const char           *field_name    = order_by_node.attr.attribute_name.c_str();
     Table                *table         = default_table;
-
     if ((0 == strcmp(field_name, "*")) || (0 == strcmp(table_name, "*"))) {
-      LOG_WARN("invalid field name in order by stmt while table or filed is *. attr=%s", field_name);
+      LOG_WARN("invalid field name in xx by stmt while table or filed is *. attr=%s", field_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
-
+    table = default_table;
     if (!common::is_blank(table_name)) {
       auto iter = table_map.find(table_name);
       if (iter == table_map.end()) {
@@ -269,17 +269,69 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       }
       table = iter->second;
     } else {
-      if (tables.size() != 1) {
-        LOG_WARN("table size should be 1 for order by stmt.");
+      if (table_map.size() != 1) {
+        LOG_WARN("table size should be 1 for xx by stmt.");
         return RC::SCHEMA_FIELD_MISSING;
       }
     }
     const FieldMeta *field_meta = table->table_meta().field(field_name);
     if (nullptr == field_meta) {
-      LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+      LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
     order_by_stmts.emplace_back(make_shared<OrderByStmt>(order_by_type, table, field_meta));
+  }
+
+  // collect group by expressions
+  std::vector<shared_ptr<Expression>> group_by_exprs_;
+  for (const auto &group_by_attr : select_sql.group_bys) {
+    const char *table_name = group_by_attr.relation_name.c_str();
+    const char *field_name = group_by_attr.attribute_name.c_str();
+
+    if ((0 == strcmp(field_name, "*")) || (0 == strcmp(table_name, "*"))) {
+      LOG_WARN("invalid field name in xx by stmt while table or filed is *. attr=%s", field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    Table *table = default_table;
+    if (!common::is_blank(table_name)) {
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      table = iter->second;
+    } else {
+      if (table_map.size() != 1) {
+        LOG_WARN("table size should be 1 for xx by stmt.");
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+
+    if (group_by_attr.is_aggr) {
+      group_by_exprs_.emplace_back(make_shared<AggregateExpr>(group_by_attr.aggr_type, table, field_meta));
+    } else {
+      group_by_exprs_.emplace_back(make_shared<FieldExpr>(table, field_meta));
+    }
+  }
+
+  // create having statement
+  FilterStmt *having_stmt = nullptr;
+  if (!select_sql.havings.empty()) {
+    RC rc = FilterStmt::create(db,
+        default_table,
+        &table_map,
+        select_sql.havings.data(),
+        static_cast<int>(select_sql.havings.size()),
+        having_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
   }
 
   // everything alright
@@ -290,6 +342,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->join_stmts_.swap(join_stmts);
   select_stmt->order_by_stmts_.swap(order_by_stmts);
-  stmt = select_stmt;
+  select_stmt->group_by_exprs_.swap(group_by_exprs_);
+  select_stmt->having_stmt_ = having_stmt;
+  stmt                      = select_stmt;
   return RC::SUCCESS;
 }

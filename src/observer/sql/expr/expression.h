@@ -310,7 +310,10 @@ class AggregateExpr : public Expression
 public:
 public:
   AggregateExpr() = default;
-  AggregateExpr(AggrType type, FieldExpr field) : aggregate_type_(type), field_(field) {}
+  AggregateExpr(AggrType type, FieldExpr field) : aggregate_type_(type), field_(field)
+  {  // todo set alias and name;
+    val_.set_null();
+  }
   AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta)
       : aggregate_type_(type), field_(table, field_meta)
   {}
@@ -329,14 +332,20 @@ public:
   AggrType         aggregate_type() const { return aggregate_type_; }
   const FieldExpr &get_field_expr() const { return field_; }
   const Field      get_field() const override { return field_.field(); }
+  void             set_field(const Field &field) { field_ = FieldExpr(field); }
+  std::string      get_alis() const { return alis_; }
+  void             set_alis(const char *alis) { this->alis_ = alis; }
   const Field     &field() { return field_.field(); }
   const char      *table_name() const override { return field_.table_name(); }
   const char      *field_name() const override { return field_.field_name(); }
 
 private:
-  AggrType  aggregate_type_;
-  FieldExpr field_;
-  Value     val_;
+  AggrType    aggregate_type_;
+  FieldExpr   field_;
+  std::string alis_;
+  // std::string relation_name_;
+  // std::string file_name_;
+  Value val_;
 };
 
 class FunctionExpr : public Expression

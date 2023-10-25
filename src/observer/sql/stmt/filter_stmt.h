@@ -26,11 +26,13 @@ class FieldMeta;
 
 struct FilterObj
 {
-  bool  is_attr;
-  Field field;
-  Value value;
-
-  void init_attr(const Field &field)
+  bool                   is_attr{false};
+  bool                   is_value{false};
+  bool                   is_expr{false};
+  Field                  field;
+  Value                  value;
+  shared_ptr<Expression> expression;  // maybe normal function or aggregate function
+  void                   init_attr(const Field &field)
   {
     is_attr     = true;
     this->field = field;
@@ -38,8 +40,14 @@ struct FilterObj
 
   void init_value(const Value &value)
   {
-    is_attr     = false;
+    is_value    = true;
     this->value = value;
+  }
+
+  void init_expr(const shared_ptr<Expression> &&expr)
+  {
+    is_expr          = true;
+    this->expression = expr;
   }
 };
 
