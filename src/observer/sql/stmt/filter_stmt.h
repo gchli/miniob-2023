@@ -29,13 +29,15 @@ class SelectStmt;
 
 struct FilterObj
 {
-  bool  is_attr;
-  bool  is_values = false;
-  Field field;
-  Value value;
-  std::vector<Value> values_;
-
-  void init_attr(const Field &field)
+  bool                   is_attr{false};
+  bool                   is_value{false};
+  bool                   is_expr{false};
+  bool                   is_values{false};
+  Field                  field;
+  Value                  value;
+  shared_ptr<Expression> expression;  // maybe normal function or aggregate function  std::vector<Value> values_;
+  std::vector<Value>     values_;
+  void                   init_attr(const Field &field)
   {
     is_attr     = true;
     this->field = field;
@@ -43,14 +45,20 @@ struct FilterObj
 
   void init_value(const Value &value)
   {
-    is_attr     = false;
+    is_value    = true;
     this->value = value;
+  }
+
+  void init_expr(const shared_ptr<Expression> &&expr)
+  {
+    is_expr          = true;
+    this->expression = expr;
   }
 
   void init_values(std::vector<Value> &&values)
   {
     is_values = true;
-    values_ = std::move(values);
+    values_   = std::move(values);
   }
 };
 
@@ -103,9 +111,10 @@ private:
 
 RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_cell_need);
 
-inline FilterUnit create_equal_filter_unit() {
+inline FilterUnit create_equal_filter_unit()
+{
   FilterUnit filter_unit;
-  FilterObj left_obj;
+  FilterObj  left_obj;
   left_obj.init_value(Value{1});
   filter_unit.set_left(left_obj);
   FilterObj right_obj;
@@ -114,9 +123,10 @@ inline FilterUnit create_equal_filter_unit() {
   return filter_unit;
 }
 
-inline FilterUnit create_not_equal_filter_unit() {
+inline FilterUnit create_not_equal_filter_unit()
+{
   FilterUnit filter_unit;
-  FilterObj left_obj;
+  FilterObj  left_obj;
   left_obj.init_value(Value{1});
   filter_unit.set_left(left_obj);
   FilterObj right_obj;

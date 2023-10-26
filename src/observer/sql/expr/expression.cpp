@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/log/log.h"
 #include "sql/expr/tuple.h"
+#include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "sql/parser/parse_defs.h"
@@ -113,19 +114,19 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
         result = left.is_null() && right.is_null();
       } break;
       case IS_NOT: {
-        result = !left.is_null() || !right.is_null(); // de morgran law
+        result = !left.is_null() || !right.is_null();  // de morgan law
       } break;
       default:
         // compare with null is always false
         result = false;
-      }
+    }
     return rc;
   }
 
   int cmp_result = left.compare(right);
   result         = false;
   switch (comp_) {
-    case IS: // maybe is is equal?
+    case IS:  // maybe is is equal?
     case EQUAL_TO: {
       result = (0 == cmp_result);
     } break;
@@ -381,7 +382,7 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   return calc_value(left_value, right_value, value);
 }
 
-std::string AggregateExpr::name() const { return name(false); }
+std::string AggregateExpr::name() const { return name(true); }
 
 std::string AggregateExpr::name(bool with_table) const
 {
@@ -392,27 +393,51 @@ std::string AggregateExpr::name(bool with_table) const
     case SUM_T: ret += "SUM"; break;
     case COUNT_T: ret += "COUNT"; break;
     case AVG_T: ret += "AVG"; break;
+    case FIELD_T: ret += ""; break;
     default: ret += "ERROR_AGGR"; break;
   }
-  ret += "(";
+
+  if (aggregate_type_ != FIELD_T) {
+    ret += "(";
+  }
+
   if (with_table) {
     ret += field_.table_name();
     ret += ".";
   }
+
   if (field_.value_type() == AttrType::UNDEFINED) {
     ret += "*";
   } else {
     ret += field_.field_name();
   }
-  ret += ")";
-  std::transform(ret.begin(), ret.end(), ret.begin(), [](char const &c) { return std::toupper(c); });
+
+  if (aggregate_type_ != FIELD_T) {
+    ret += ")";
+  }
+  if (aggregate_type_ != FIELD_T) {
+    std::transform(ret.begin(), ret.end(), ret.begin(), [](char const &c) { return std::toupper(c); });
+  }
   return ret;
 }
 
 RC AggregateExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  value = val_;
-  return RC::SUCCESS;
+  if (!val_.is_null()) {
+    value = val_;
+  }
+  RC rc = RC::SUCCESS;
+  if (aggregate_type_ == FIELD_T) {
+    field_.get_value(tuple, value);
+  } else {
+    TupleCellSpec tuple_cell(this->name(true).c_str());
+    rc = tuple.find_cell(tuple_cell, value);
+  }
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of field expression. rc=%s", strrc(rc));
+  }
+  // value = val_;
+  return rc;
 }
 
 RC AggregateExpr::try_get_value(Value &value) const

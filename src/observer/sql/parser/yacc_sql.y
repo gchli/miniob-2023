@@ -114,6 +114,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         ORDER
         BY
         ASC
+        HAVING
+        GROUP
         IN_T
         EXIST_T
 
@@ -177,11 +179,13 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
+%type <condition_list>      having
 %type <condition>           join_condition
 %type <condition_list>      join_condition_list
 %type <rel_attr_list>       select_attr
 %type <relation_list>       rel_list
 %type <rel_attr_list>       attr_list
+%type <rel_attr_list>       group_by
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <attribute_list>      id_list
@@ -592,7 +596,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      
+
       if ($5 != nullptr) {
         $$->update.update_list.swap(*$5);
         delete $5;
@@ -647,7 +651,7 @@ select_stmt:        /*  select 语句的语法解析树*/
     }
 
 select_body:
-    SELECT select_attr FROM ID rel_list inner_join_list where order_by
+    SELECT select_attr FROM ID rel_list inner_join_list where group_by having order_by
     {
       $$ = new SelectSqlNode;
       if ($2 != nullptr) {
@@ -676,10 +680,22 @@ select_body:
         delete$7;
       }
 
-      // order by
+      // group by
       if ($8 != nullptr) {
-        $$->order_bys.swap(*$8);
+        $$->group_bys.swap(*$8);
         delete $8;
+      }
+
+      // having
+      if ($9 != nullptr) {
+        $$->havings.swap(*$9);
+        delete $9;
+      }
+
+      // order by
+      if ($10 != nullptr) {
+        $$->order_bys.swap(*$10);
+        delete $10;
       }
       std::reverse($$->order_bys.begin(), $$->order_bys.end());
       free($4);
@@ -892,6 +908,40 @@ where:
     }
     ;
 
+
+having:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | HAVING condition_list {
+      $$ = $2;
+    }
+    ;
+
+group_by:
+    {
+      $$ = nullptr;
+    }
+    | GROUP BY rel_attr attr_list {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$3);
+      delete $3;
+    }
+    | GROUP BY aggr_func attr_list {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$3);
+      delete $4;
+      }
+    ;
 inner_join_list:
     {
       $$ = nullptr;
@@ -1002,6 +1052,30 @@ condition:
       $$->left_value = *$1;
       $$->right_is_attr = 1;
       $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | value comp_op aggr_func // value should be replaced by expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | aggr_func comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
       $$->comp = $2;
 
       delete $1;

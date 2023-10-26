@@ -130,6 +130,8 @@ JOIN                                    RETURN_TOKEN(JOIN);
 ORDER                                   RETURN_TOKEN(ORDER);
 BY                                      RETURN_TOKEN(BY);
 ASC                                     RETURN_TOKEN(ASC);
+GROUP                                   RETURN_TOKEN(GROUP);
+HAVING                                  RETURN_TOKEN(HAVING);
 IN                                      RETURN_TOKEN(IN_T);
 EXIST                                   RETURN_TOKEN(EXIST_T);
 
