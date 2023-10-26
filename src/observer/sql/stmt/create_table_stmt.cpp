@@ -39,8 +39,12 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
       return rc;
     }
     std::vector<AttrInfoSqlNode> attr_infos;
-    for (auto &expr : static_cast<SelectStmt*>(select_stmt)->query_exprs()) {
-      attr_infos.emplace_back(AttrInfoSqlNode{expr->value_type(), expr->name_create(), 4, true});
+    if (!create_table.attr_infos.empty()) {
+      attr_infos = create_table.attr_infos;
+    } else {
+      for (auto &expr : static_cast<SelectStmt*>(select_stmt)->query_exprs()) {
+        attr_infos.emplace_back(AttrInfoSqlNode{expr->value_type(), expr->name_create(), 4, true});
+      }
     }
     auto values = std::make_shared<std::vector<std::vector<Value>>>();
     rc = CreateSelectToValues(select_stmt, values);
