@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <sstream>
 #include <string.h>
 #include <memory>
 #include <string>
@@ -101,6 +102,8 @@ public:
   virtual const char *field_name() const { return ""; }
   virtual const Field get_field() const { return {}; }
 
+  virtual std::string name_create() const { return ""; } // used for create as select
+
 private:
   std::string name_;
 };
@@ -128,6 +131,7 @@ public:
   const char  *table_name() const override { return field_.table_name(); }
 
   const char *field_name() const override { return field_.field_name(); }
+  std::string name_create() const override { return field_name(); }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -161,6 +165,8 @@ public:
   void get_value(Value &value) const { value = value_; }
 
   const Value &get_value() const { return value_; }
+
+  std::string name_create() const override { return value_.to_string().c_str(); }
 
 private:
   Value value_;
@@ -377,6 +383,8 @@ public:
   const Field     &field() { return field_.field(); }
   const char      *table_name() const override { return field_.table_name(); }
   const char      *field_name() const override { return field_.field_name(); }
+
+  std::string name_create() const override { return name(false); }
 
 private:
   AggrType    aggregate_type_;

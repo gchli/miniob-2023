@@ -36,5 +36,29 @@ RC CreateTableExecutor::execute(SQLStageEvent *sql_event)
   const char *table_name = create_table_stmt->table_name().c_str();
   RC rc = session->get_current_db()->create_table(table_name, attribute_count, create_table_stmt->attr_infos().data());
 
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("Create table %s failed", table_name);
+    return rc;
+  }
+
+  if (static_cast<CreateTableStmt*>(stmt)->create_select_) {
+    const auto& values = static_cast<CreateTableStmt*>(stmt)->values_;
+    auto table = session->get_current_db()->find_table(table_name);
+    for (auto& row : *values) {
+      // table->insert_row(row);
+      Record record;
+      rc = table->make_record(row.size(), row.data(), record);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("make record failed");
+        return rc;
+      }
+      rc = table->insert_record(record);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("insert record failed");
+        return rc;
+      }
+    }
+  }
+
   return rc;
 }

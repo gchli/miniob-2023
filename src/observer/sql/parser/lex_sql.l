@@ -134,6 +134,7 @@ GROUP                                   RETURN_TOKEN(GROUP);
 HAVING                                  RETURN_TOKEN(HAVING);
 IN                                      RETURN_TOKEN(IN_T);
 EXIST                                   RETURN_TOKEN(EXIST_T);
+AS                                      RETURN_TOKEN(AS);
 
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
