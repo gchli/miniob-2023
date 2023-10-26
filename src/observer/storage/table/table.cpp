@@ -381,6 +381,18 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
     Value value = value_map.at(i);
     // 带有日期的情况需要特殊判断，并且需要判断日期的合法性
     if (field->type() != value.attr_type()) {
+      if (field->type() == TEXTS && value.attr_type() == CHARS) {
+        string val_str(std::move(value.get_string()));
+        if (val_str.size() > 65536) {
+          val_str = val_str.substr(0, 65536);
+        }
+        size_t text_hash = std::hash<std::string>()(val_str);
+        if (text_hashmap_.find(text_hash) == text_hashmap_.end()) {
+          text_hashmap_.insert({text_hash, make_shared<std::string>(std::move(val_str))});
+        }
+        memcpy(record_data + field->offset(), &text_hash, field->len());
+        continue;
+      }
       if (field->type() == DATES && value.attr_type() == CHARS) {
         date_u date;
 
