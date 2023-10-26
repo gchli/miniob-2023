@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include "storage/table/table_meta.h"
 
@@ -31,9 +32,9 @@ class Trx;
 
 /**
  * @brief 表
- * 
+ *
  */
-class Table 
+class Table
 {
 public:
   Table() = default;
@@ -47,12 +48,8 @@ public:
    * @param attribute_count 字段个数
    * @param attributes 字段
    */
-  RC create(int32_t table_id, 
-            const char *path, 
-            const char *name, 
-            const char *base_dir, 
-            int attribute_count, 
-            const AttrInfoSqlNode attributes[]);
+  RC create(int32_t table_id, const char *path, const char *name, const char *base_dir, int attribute_count,
+      const AttrInfoSqlNode attributes[]);
 
   RC drop(const char *base_dir);
 
@@ -64,7 +61,8 @@ public:
   RC open(const char *meta_file, const char *base_dir);
 
   // 制作一个新的Record，使用对应的Attr与Value替换，用来update
-  RC make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas, const std::unordered_map<size_t, Value> &value_map);
+  RC make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas,
+      const std::unordered_map<size_t, Value> &value_map);
 
   // 通过attribute获得FieldMeta，或许应该移动到tablemeta中
   RC get_field_meta_by_name(FieldMeta const *&field_meta, const std::string &attribute);
@@ -96,13 +94,11 @@ public:
 
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly);
 
-  RecordFileHandler *record_handler() const
-  {
-    return record_handler_;
-  }
+  RecordFileHandler                                        *record_handler() const { return record_handler_; }
+  std::unordered_map<std::size_t, shared_ptr<std::string>> &get_text_hashmap() { return text_hashmap_; }
 
 public:
-  int32_t table_id() const { return table_meta_.table_id(); }
+  int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
 
   const TableMeta &table_meta() const;
@@ -121,9 +117,10 @@ public:
   Index *find_index_by_field(const char *field_name) const;
 
 private:
-  std::string base_dir_;
-  TableMeta   table_meta_;
-  DiskBufferPool *data_buffer_pool_ = nullptr;   /// 数据文件关联的buffer pool
-  RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
+  std::string          base_dir_;
+  TableMeta            table_meta_;
+  DiskBufferPool      *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
+  RecordFileHandler   *record_handler_   = nullptr;  /// 记录操作
   std::vector<Index *> indexes_;
+  std::unordered_map<std::size_t, shared_ptr<std::string>> text_hashmap_;
 };

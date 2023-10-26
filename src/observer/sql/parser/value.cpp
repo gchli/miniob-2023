@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <cmath>
+#include <cstddef>
 #include <sstream>
 #include "common/date.h"
 #include "common/rc.h"
@@ -23,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "dates"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "dates", "texts"};
 
 const char *attr_type_to_string(AttrType type)
 {
@@ -51,6 +52,9 @@ Value::Value(bool val) { set_boolean(val); }
 Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
 Value::Value(date_u date) { set_date(date); }
+
+Value::Value(std::size_t val) { set_text_hash(val); }
+
 void Value::set_data(char *data, int length)
 {
   null = false;
@@ -73,6 +77,10 @@ void Value::set_data(char *data, int length)
     case DATES: {
       date_value_ = *(date_u *)data;
       length_     = length;
+    } break;
+    case TEXTS: {
+      text_hash_ = *(size_t *)data;
+      length_    = length;
     } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
@@ -110,6 +118,13 @@ void Value::set_string(const char *s, int len /*= 0*/)
   length_ = str_value_.length();
 }
 
+void Value::set_text_hash(size_t val)
+{
+  attr_type_ = TEXTS;
+  text_hash_ = val;
+  length_    = sizeof(val);
+}
+
 void Value::set_date(date_u d)
 {
   attr_type_  = DATES;
@@ -135,6 +150,9 @@ void Value::set_value(const Value &value)
     case DATES: {
       set_date(value.get_date());
     } break;
+    case TEXTS: {
+      set_text_hash(value.get_text_hash());
+    }
     case UNDEFINED: {
       ASSERT(false, "got an invalid value type");
     } break;
@@ -148,6 +166,9 @@ bool Value::is_null() const { return null; }
 const char *Value::data() const
 {
   switch (attr_type_) {
+    case TEXTS: {
+      return (const char *)&text_hash_;
+    } break;
     case CHARS: {
       return str_value_.c_str();
     } break;
@@ -183,6 +204,9 @@ std::string Value::to_string() const
     case DATES: {
       os << date_to_str(date_value_);
     } break;
+    case TEXTS: {
+      os << text_hash_;
+    }
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
@@ -284,73 +308,74 @@ int Value::compare(const Value &other) const
   return -1;  // TODO return rc?
 }
 
-RC Value::convert_to(AttrType type) {
+RC Value::convert_to(AttrType type)
+{
   if (attr_type_ == type) {
     return RC::SUCCESS;
   }
   switch (attr_type_) {
-  case FLOATS: {
-    float val = get_float();
-    switch (type) {
-      case INTS: {
-        set_int(round(val));
-      } break;
-      case CHARS: {
-        set_string(common::double_to_str(val).c_str());
-      } break;
-      default: {
-        LOG_WARN("Invalid convert type. type=%d", type);
-        return RC::INVALID_ARGUMENT;
-      }
-    }
-    break;
-  }
-  case INTS: {
-    int val = get_int();
-    switch (type) {
-      case FLOATS: {
-        set_float((float)val);
-      } break;
-      case CHARS: {
-        set_string(std::to_string(val).c_str());
-      } break;
-      default: {
-        LOG_WARN("Invalid convert type. type=%d", type);
-        return RC::INVALID_ARGUMENT;
-      }
-    }
-    break;
-  }
-  case CHARS: {
-    std::string val = get_string();
-    switch (type) {
-      case FLOATS: {
-        try {
-          set_float(std::stof(val));
-        } catch (std::exception const &ex) {
-          LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+    case FLOATS: {
+      float val = get_float();
+      switch (type) {
+        case INTS: {
+          set_int(round(val));
+        } break;
+        case CHARS: {
+          set_string(common::double_to_str(val).c_str());
+        } break;
+        default: {
+          LOG_WARN("Invalid convert type. type=%d", type);
           return RC::INVALID_ARGUMENT;
         }
-      } break;
-      case INTS: {
-        try {
-          set_int(std::stoi(val));
-        } catch (std::exception const &ex) {
-          LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+      }
+      break;
+    }
+    case INTS: {
+      int val = get_int();
+      switch (type) {
+        case FLOATS: {
+          set_float((float)val);
+        } break;
+        case CHARS: {
+          set_string(std::to_string(val).c_str());
+        } break;
+        default: {
+          LOG_WARN("Invalid convert type. type=%d", type);
           return RC::INVALID_ARGUMENT;
         }
-      } break;
-      default: {
-        LOG_WARN("Invalid convert type. type=%d", type);
-        return RC::INVALID_ARGUMENT;
       }
+      break;
     }
-    break;
-  }
-  default: {
-    LOG_WARN("Invalid convert type. type=%d", type);
-    return RC::INVALID_ARGUMENT;
-  }
+    case CHARS: {
+      std::string val = get_string();
+      switch (type) {
+        case FLOATS: {
+          try {
+            set_float(std::stof(val));
+          } catch (std::exception const &ex) {
+            LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+            return RC::INVALID_ARGUMENT;
+          }
+        } break;
+        case INTS: {
+          try {
+            set_int(std::stoi(val));
+          } catch (std::exception const &ex) {
+            LOG_WARN("Failed to convert string to int. s=%s, ex=%s", val.c_str(), ex.what());
+            return RC::INVALID_ARGUMENT;
+          }
+        } break;
+        default: {
+          LOG_WARN("Invalid convert type. type=%d", type);
+          return RC::INVALID_ARGUMENT;
+        }
+      }
+      break;
+    }
+    default: {
+      LOG_WARN("Invalid convert type. type=%d", type);
+      return RC::INVALID_ARGUMENT;
+    }
   }
   return RC::SUCCESS;
 }
@@ -415,6 +440,7 @@ float Value::get_float() const
 
 std::string Value::get_string() const { return this->to_string(); }
 date_u      Value::get_date() const { return date_value_; }
+std::size_t Value::get_text_hash() const { return text_hash_; }
 bool        Value::get_boolean() const
 {
   switch (attr_type_) {

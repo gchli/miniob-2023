@@ -236,6 +236,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   Table *default_table = nullptr;
   if (tables.size() == 1) {
     default_table = tables[0];
+    db->set_default_table(default_table);
   }
 
   // create filter statement in `where` statement
@@ -279,7 +280,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     }
     const FieldMeta *field_meta = table->table_meta().field(field_name);
     if (nullptr == field_meta) {
-      LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name);
+      LOG_WARN("no such field. field=%s.%s", table->name(), field_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
     order_by_stmts.emplace_back(make_shared<OrderByStmt>(order_by_type, table, field_meta));

@@ -16,9 +16,13 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "common/log/log.h"
 #include "common/rc.h"
+#include "sql/parser/value.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "common/date.h"
+#include <functional>
+#include <memory>
+#include <string>
 
 InsertStmt::InsertStmt(Table *table, const std::vector<Value> *insert_values, int insert_amount)
     : table_(table), insert_values_(insert_values), insert_amount_(insert_amount)
@@ -53,22 +57,33 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
 
     // check fields type
     const int sys_field_num = table_meta.sys_field_num();
-    for (int i = 0; i < value_num; i++) {
-      const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
+    for (int j = 0; j < value_num; j++) {
+      const FieldMeta *field_meta = table_meta.field(j + sys_field_num);
       const AttrType   field_type = field_meta->type();
-      const AttrType   value_type = values[i].attr_type();
+      const AttrType   value_type = values[j].attr_type();
       if (field_type != value_type) {
+        if (field_type == AttrType::TEXTS && value_type == AttrType::CHARS) {
+          // auto       &text_hashmap = table->get_text_hashmap();
+          // std::string text_hash    = to_string(std::hash<std::string>()(values[j].get_string()));
+          // if (text_hashmap.find(text_hash) == text_hashmap.end()) {
+          //   text_hashmap.insert({text_hash, make_shared<std::string>(values[j].get_string())});
+          // }
+          // inserts.insert_values[i][j].set_text_hash(text_hash.c_str());
+          LOG_DEBUG("field type mismatch, convert string to text. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          continue;
+        }
         if (field_type == AttrType::DATES && value_type == AttrType::CHARS) {
           LOG_DEBUG("field type mismatch, convert string to date. table=%s, field=%s, field type=%d, value_type=%d",
             table_name, field_meta->name(), field_type, value_type);
-          if (!is_date_valid(values[i].get_string())) {
+          if (!is_date_valid(values[j].get_string())) {
             LOG_WARN("invalid date string. table=%s, field=%s, value=%s",
-                table_name, field_meta->name(), values[i].get_string().c_str());
+                table_name, field_meta->name(), values[j].get_string().c_str());
             return RC::INVALID_ARGUMENT;
           }
           continue;
         }
-        if (field_meta->nullable() && values[i].is_null()) {
+        if (field_meta->nullable() && values[j].is_null()) {
           LOG_DEBUG("field is nullable and value is null. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
           continue;
