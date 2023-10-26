@@ -26,7 +26,9 @@ do {                                                         \
 }                                                            \
 while (0);
 
-#line 30 "lex_sql.h"
+#define YYLMAX (65536 + 65536)
+
+#line 32 "lex_sql.h"
 
 #define  YY_INT_ALIGNED short int
 
@@ -541,9 +543,9 @@ extern int yylex \
 #undef yyTABLES_NAME
 #endif
 
-#line 159 "lex_sql.l"
+#line 161 "lex_sql.l"
 
 
-#line 548 "lex_sql.h"
+#line 550 "lex_sql.h"
 #undef yyIN_HEADER
 #endif /* yyHEADER_H */

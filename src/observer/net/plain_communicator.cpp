@@ -13,12 +13,16 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "net/plain_communicator.h"
+#include "common/lang/string.h"
 #include "net/buffered_writer.h"
 #include "sql/expr/tuple.h"
 #include "event/session_event.h"
 #include "session/session.h"
 #include "common/io/io.h"
 #include "common/log/log.h"
+#include "sql/parser/value.h"
+#include "storage/db/db.h"
+#include <cstddef>
 
 PlainCommunicator::PlainCommunicator()
 {
@@ -181,7 +185,8 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   RC rc           = RC::SUCCESS;
   need_disconnect = true;
 
-  SqlResult *sql_result = event->sql_result();
+  SqlResult *sql_result  = event->sql_result();
+  Session   *cur_session = event->session();
 
   if (RC::SUCCESS != sql_result->return_code() || !sql_result->has_operator()) {
     return write_state(event, need_disconnect);
@@ -255,7 +260,30 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
       }
 
       std::string cell_str = value.to_string();
-      rc                   = writer_->writen(cell_str.data(), cell_str.size());
+      if (value.attr_type() == TEXTS) {
+        const TupleCellSpec &spec       = schema.cell_at(i);
+        const char          *table_name = spec.table_name();
+        Table               *table;
+        if (common::is_blank(table_name)) {
+          table = cur_session->get_current_db()->get_default_table();
+        } else {
+          table = cur_session->get_current_db()->find_table(table_name);
+        }
+        if (table == nullptr) {
+          LOG_WARN("table not found when write result. table_name=%s", table_name);
+          return RC::INVALID_ARGUMENT;
+        }
+        const auto &text_hashmap = table->get_text_hashmap();
+        std::size_t text_hash    = value.get_text_hash();
+        if (text_hashmap.find(text_hash) == text_hashmap.end()) {
+          LOG_WARN("text not found. text hash is = %s", to_string(text_hash).c_str());
+          // return RC::INVALID_ARGUMENT;
+        } else {
+          cell_str = *(text_hashmap.at(text_hash));
+        }
+      }
+
+      rc = writer_->writen(cell_str.data(), cell_str.size());
       if (OB_FAIL(rc)) {
         LOG_WARN("failed to send data to client. err=%s", strerror(errno));
         sql_result->close();

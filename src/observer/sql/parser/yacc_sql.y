@@ -78,6 +78,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         STRING_T
         FLOAT_T
         DATE_T
+        TEXT_T
         HELP
         EXIT
         DOT //QUOTE
@@ -428,6 +429,15 @@ attr_def:
       $$->nullable = $6;
       free($1);
     }
+    | ID TEXT_T attr_null
+    {
+      $$ = new AttrInfoSqlNode;
+      $$->type = TEXTS;
+      $$->name = $1;
+      $$->length = 8;
+      $$->nullable = $3;
+      free($1);
+    }
     | ID type attr_null
     {
       $$ = new AttrInfoSqlNode;
@@ -456,11 +466,14 @@ attr_null:
 number:
     NUMBER {$$ = $1;}
     ;
+
+
 type:
     INT_T      { $$=INTS; }
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
     | DATE_T   { $$=DATES; }
+    /* | TEXT_T   { $$=TEXTS; } */
     ;
 aggr_type:
     MAX { $$=MAX_T; }

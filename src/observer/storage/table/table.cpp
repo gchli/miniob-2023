@@ -200,19 +200,19 @@ RC Table::open(const char *meta_file, const char *base_dir)
 
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
-    const IndexMeta *index_meta = table_meta_.index(i);
+    const IndexMeta               *index_meta = table_meta_.index(i);
     std::vector<const FieldMeta *> field_metas;
-    for (const auto & field : index_meta->fields()) {
+    for (const auto &field : index_meta->fields()) {
       const FieldMeta *field_meta = table_meta_.field(field.c_str());
       if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
+        LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
                 name(), index_meta->name(), index_meta->fields()[0].c_str());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::INTERNAL;
+        // skip cleanup
+        //  do all cleanup action in destructive Table function
+        return RC::INTERNAL;
       }
       field_metas.emplace_back(field_meta);
-    }    
+    }
 
     BplusTreeIndex *index      = new BplusTreeIndex(index_meta->unique());
     std::string     index_file = table_index_file(base_dir, name(), index_meta->name());
@@ -282,7 +282,8 @@ RC Table::get_record(const RID &rid, Record &record)
   return rc;
 }
 
-RC Table::update_record(const Record &old_record, const Record &new_record) {
+RC Table::update_record(const Record &old_record, const Record &new_record)
+{
   RC rc = delete_entry_of_indexes(old_record.data(), old_record.rid(), false);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to delete old indices when updating");
@@ -302,15 +303,15 @@ RC Table::update_record(const Record &old_record, const Record &new_record) {
   }
   record_handler_->update_record(new_record);
   if (rc != RC::SUCCESS) {
-      LOG_ERROR("Failed to update record using record_handler (rid=%d.%d). rc=%d:%s",
+    LOG_ERROR("Failed to update record using record_handler (rid=%d.%d). rc=%d:%s",
         new_record.rid().page_num, new_record.rid().slot_num, rc, strrc(rc));
-      return rc;
-    }
+    return rc;
+  }
   // 前面的区域以后再来探索吧
   // if (trx != nullptr) {
   //   CLogRecord *clog_record = nullptr;
-  //   rc = clog_manager_->clog_gen_record(CLogType::REDO_INSERT, trx->get_current_id(), clog_record, name(), table_meta_.record_size(), new_rec);
-  //   if (rc != RC::SUCCESS) {
+  //   rc = clog_manager_->clog_gen_record(CLogType::REDO_INSERT, trx->get_current_id(), clog_record, name(),
+  //   table_meta_.record_size(), new_rec); if (rc != RC::SUCCESS) {
   //     LOG_ERROR("Failed to create a clog record. rc=%d:%s", rc, strrc(rc));
   //     return rc;
   //   }
@@ -364,14 +365,15 @@ RC Table::get_field_meta_by_name(FieldMeta const *&field_meta, const std::string
   return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
-RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas, const std::unordered_map<size_t, Value> &value_map)
+RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas,
+    const std::unordered_map<size_t, Value> &value_map)
 {
   int   record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
   memcpy(record_data, old_record.data(), record_size);
 
-  int col_count = field_metas.size();
-  const FieldMeta *field = nullptr;
+  int              col_count = field_metas.size();
+  const FieldMeta *field     = nullptr;
 
   for (size_t i = 0; i < col_count; i++) {
     field = field_metas[i];
@@ -391,7 +393,7 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
       }
       if (field->nullable() && value.is_null()) {
         set_mem_null(record_data + field->offset(), field->type(), field->len());
-        continue; 
+        continue;
       }
       if (value.convert_to(field->type()) != RC::SUCCESS) {
         free(record_data);
@@ -437,6 +439,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value     &value = values[i];
     if (field->type() != value.attr_type()) {
+
       if (value.attr_type() == UNDEFINED && value.is_null()) {
         if (field->nullable()) {
           continue;
@@ -444,6 +447,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
         LOG_ERROR("Insert null attribute into not null field. table name =%s, field name=%s, type=%d",
                   table_meta_.name(), field->name(), field->type());
         return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
+      if (value.attr_type() == CHARS && field->type() == TEXTS) {
+        continue;
       }
       if (field->type() == DATES && value.attr_type() == CHARS) {
         // 在创建insert stmt时已进行过检查
@@ -481,6 +487,18 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       RC     ret = str_to_date(value.get_string(), date);
       Value  date_val(date);
       memcpy(record_data + field->offset(), date_val.data(), copy_len);
+      continue;
+    }
+    if (field->type() == TEXTS && value.attr_type() == CHARS) {
+      string val_str(std::move(value.get_string()));
+      if (val_str.size() > 65536) {
+        val_str = val_str.substr(0, 65536);
+      }
+      size_t text_hash = std::hash<std::string>()(val_str);
+      if (text_hashmap_.find(text_hash) == text_hashmap_.end()) {
+        text_hashmap_.insert({text_hash, make_shared<std::string>(std::move(val_str))});
+      }
+      memcpy(record_data + field->offset(), &text_hash, copy_len);
       continue;
     }
     if (field->type() == CHARS) {

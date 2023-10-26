@@ -1,5 +1,6 @@
 #include "storage/common/limits.h"
 #include "sql/parser/value.h"
+#include <cstddef>
 
 void set_mem_null(void *dst, AttrType attr_type, size_t attr_len)
 {
@@ -14,6 +15,9 @@ void set_mem_null(void *dst, AttrType attr_type, size_t attr_len)
     memcpy(dst, &nullval, sizeof(int32_t));
   } else if (attr_type == CHARS) {
     memset(dst, MINIOB_CHARS_NULL, attr_len);
+  } else if (attr_type == TEXTS) {
+    size_t nullval = MINIOB_TEXT_HASH_NULL;
+    memcpy(dst, &nullval, sizeof(size_t));
   }
 }
 
@@ -33,6 +37,9 @@ bool is_mem_null(const void *dst, const AttrType attr_type, const size_t attr_le
     memset(chars_null, MINIOB_CHARS_NULL, attr_len);
     int ret = memcmp(dst, chars_null, attr_len);
     return ret == 0;
+  } else if (attr_type == TEXTS) {
+    size_t nullval = MINIOB_TEXT_HASH_NULL;
+    return memcmp(dst, &nullval, sizeof(std::size_t)) == 0;
   } else {
     return false;
   }

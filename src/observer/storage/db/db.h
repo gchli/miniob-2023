@@ -60,16 +60,18 @@ public:
   RC recover();
 
   CLogManager *clog_manager();
+  void         set_default_table(Table *table) { default_table_ = table; }
+  Table       *get_default_table() { return default_table_; }
 
 private:
   RC open_all_tables();
 
 private:
-  std::string name_;
-  std::string path_;
+  std::string                              name_;
+  std::string                              path_;
   std::unordered_map<std::string, Table *> opened_tables_;
-  std::unique_ptr<CLogManager> clog_manager_;
-
+  std::unique_ptr<CLogManager>             clog_manager_;
+  Table                                   *default_table_{nullptr};
   /// 给每个table都分配一个ID，用来记录日志。这里假设所有的DDL都不会并发操作，所以相关的数据都不上锁
   int32_t next_table_id_ = 0;
 };

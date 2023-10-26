@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include "common/date.h"
 /**
@@ -28,6 +29,7 @@ enum AttrType
   FLOATS,    ///< 浮点数类型(4字节)
   BOOLEANS,  ///< boolean类型，当前不是由parser解析出来的，是程序内部使用的
   DATES,
+  TEXTS,
   // NULLS,
 };
 
@@ -50,6 +52,8 @@ public:
   explicit Value(bool val);
   explicit Value(const char *s, int len = 0);
   explicit Value(date_u date);
+  explicit Value(std::size_t val);
+
   Value(const Value &other)            = default;
   Value &operator=(const Value &other) = default;
 
@@ -60,13 +64,14 @@ public:
   void set_float(float val);
   void set_boolean(bool val);
   void set_string(const char *s, int len = 0);
+  void set_text_hash(size_t val);
   void set_date(date_u d);
   void set_value(const Value &value);
   void set_null();
 
   std::string to_string() const;
 
-  int compare(const Value &other) const;
+  int  compare(const Value &other) const;
   bool compare_like(const Value &other) const;
 
   RC convert_to(AttrType type);
@@ -86,6 +91,7 @@ public:
   std::string get_string() const;
   bool        get_boolean() const;
   date_u      get_date() const;
+  std::size_t get_text_hash() const;
   bool        is_null() const;
 
 private:
@@ -100,5 +106,6 @@ private:
   } num_value_;
   std::string str_value_;
   date_u      date_value_;
-  bool null = false;
+  std::size_t text_hash_;
+  bool        null = false;
 };
