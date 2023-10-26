@@ -42,7 +42,7 @@ public:
 
   Table *table() const { return table_; }
   const int get_field_count() const { return field_metas_.size(); }
-  const std::vector<const FieldMeta *> field_metas() const { return field_metas_; }
+  std::vector<const FieldMeta *> field_metas() { return field_metas_; }
   const std::string &index_name() const { return index_name_; }
   bool unique() const { return unique_; }
 

@@ -187,16 +187,34 @@ RC MvccTrx::delete_record(Table * table, Record &record)
 }
 
 RC MvccTrx::update_record(Table *table, Record &old_record, Record &new_record) {
-  RC rc;
-  rc = delete_record(table, old_record);
-  if (rc != RC::SUCCESS) {
-    return rc;
+  RC rc = RC::SUCCESS;
+  Field begin_field;
+  Field end_field;
+  trx_fields(table, begin_field, end_field);
+
+  int32_t end_xid = end_field.get_int(old_record);
+  int32_t begin_xid = begin_field.get_int(old_record);
+
+  bool updated_in_this_tx = begin_xid == -trx_id_; // 在当前事务中更新了，但是还没有提交（-)
+  if (updated_in_this_tx) {
+    // 当前事务已经更新过当前record了，直接原地更新即可
+    rc = table->update_record(old_record, new_record);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    
+  } else {
+    rc = delete_record(table, old_record);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    rc = insert_record(table, new_record);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    return RC::SUCCESS;
   }
-  rc = insert_record(table, new_record);
-  if (rc != RC::SUCCESS) {
-    return rc;
-  }
-  return RC::SUCCESS;
+  return rc;
 }
 
 

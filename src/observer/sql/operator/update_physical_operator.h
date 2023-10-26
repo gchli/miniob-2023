@@ -3,6 +3,7 @@
 #include "sql/operator/physical_operator.h"
 #include "sql/parser/value.h"
 #include "storage/table/table.h"
+#include <vector>
 class Trx;
 class DeleteStmt;
 
@@ -37,4 +38,5 @@ private:
   std::unordered_map<size_t, Value> value_map_;
   Trx        *trx_ = nullptr;
   bool wrong_select_ = false;
+  std::vector<Record> records;
 };

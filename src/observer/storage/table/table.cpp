@@ -530,11 +530,15 @@ RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const std::vector<const FieldMeta *> &field_metas, const char *index_name, bool unique)
+RC Table::create_index(Trx *trx, std::vector<const FieldMeta *> field_metas, const char *index_name, bool unique)
 {
   if (common::is_blank(index_name) || field_metas.empty()) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
+  }
+  for (int i = 0; i < table_meta_.sys_field_num(); i++) {
+    const FieldMeta *field = table_meta_.field(i);
+    field_metas.emplace_back(field);
   }
 
   IndexMeta new_index_meta;

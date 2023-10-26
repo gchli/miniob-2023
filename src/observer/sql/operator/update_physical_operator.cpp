@@ -65,9 +65,36 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       LOG_WARN("more than one record in update-select");
       wrong_select_ = true;
     }
+    rc = oper->close();
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to close child operator: %s", strrc(rc));
+      return rc;
+    }
   }
 
   trx_ = trx;
+
+  while (RC::SUCCESS == (rc = child->next())) {
+    if (wrong_select_) {
+      LOG_WARN("more than one record in update-select");
+      return RC::INVALID_ARGUMENT;
+    }
+
+    Tuple *tuple = child->current_tuple();
+    if (nullptr == tuple) {
+      LOG_WARN("failed to get current record: %s", strrc(rc));
+      return rc;
+    }
+
+    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+    Record &record = row_tuple->record();
+    records.emplace_back(record);
+    // rc = trx_->delete_record(table_, record);
+    // if (rc != RC::SUCCESS) {
+    //   LOG_WARN("failed to delete record: %s", strrc(rc));
+    //   return rc;
+    // }
+  }
 
   return RC::SUCCESS;
 }
@@ -79,20 +106,9 @@ RC UpdatePhysicalOperator::next()
     return RC::RECORD_EOF;
   }
 
-  PhysicalOperator *child = children_[0].get();
-  while (RC::SUCCESS == (rc = child->next())) {
-    if (wrong_select_) {
-      LOG_WARN("more than one record in update-select");
-      return RC::INVALID_ARGUMENT;
-    }
-    Tuple *tuple = child->current_tuple();
-    if (nullptr == tuple) {
-      LOG_WARN("failed to get current record: %s", strrc(rc));
-      return rc;
-    }
-
-    RowTuple *row_tuple  = static_cast<RowTuple *>(tuple);
-    Record   &old_record = row_tuple->record();
+  while (!records.empty()) {
+    Record old_record = records.back();
+    records.pop_back();
     Record    new_record;
     rc = table_->make_update_record(new_record, old_record, field_metas_, value_map_);
     if (rc != RC::SUCCESS) {
