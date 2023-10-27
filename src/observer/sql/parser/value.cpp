@@ -289,6 +289,9 @@ int Value::compare(const Value &other) const
         return -1;
       }
       return common::compare_date((void *)&this_data, (void *)&other.date_value_);
+    } else if (other.attr_type() == TEXTS) {
+      std::size_t text_hash = std::hash<string>()(this->str_value_);
+      return common::compare_texts((void *)&text_hash, (void *)&other.text_hash_);
     }
   } else if (this->attr_type_ == DATES) {
     if (other.attr_type() == CHARS) {
@@ -306,6 +309,9 @@ int Value::compare(const Value &other) const
       int other_data = other.num_value_.float_value_;
       return common::compare_int((void *)&this->date_value_, (void *)&other_data);
     }
+  } else if (this->attr_type_ == TEXTS) {
+    std::size_t text_hash = std::hash<string>()(other.get_string());
+    return common::compare_texts((void *)&this->text_hash_, (void *)&text_hash_);
   }
   LOG_ERROR("Invalid data compare.");
   return -1;  // TODO return rc?

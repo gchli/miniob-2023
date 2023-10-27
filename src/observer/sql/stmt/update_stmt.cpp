@@ -93,11 +93,11 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
               table_name, field_meta->name(), value.get_string().c_str());
           return RC::INVALID_ARGUMENT;
         }
-      } else if (field_meta->type() == TEXTS && value.attr_type() == CHARS) {
-        // continue;
       } else if (field_meta->nullable() && value.is_null()) {
         LOG_DEBUG("field convert null to nullable. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_meta->type(), value.attr_type());
+      } else if (field_meta->type() == TEXTS && value.attr_type() == CHARS) {
+        // continue;
       } else if ((rc = value.convert_to(field_meta->type())) != RC::SUCCESS) {
         rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
         LOG_WARN("failed to create update statement. rc=%d:%s", rc, strrc(rc));

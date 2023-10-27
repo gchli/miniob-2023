@@ -23,6 +23,7 @@ do {                                                         \
 while (0);
 
 #define YYLMAX (65536 + 65536)
+#define YY_READ_BUF_SIZE YYLMAX
 }
 
 %{
