@@ -12,6 +12,8 @@ See the Mulan PSL v2 for more details. */
 // Created by wangyunlai on 2021/6/11.
 //
 
+#include <csignal>
+#include <cstddef>
 #include <string.h>
 #include <algorithm>
 #include "common/defs.h"
@@ -24,6 +26,13 @@ int compare_int(void *arg1, void *arg2)
 {
   int v1 = *(int *)arg1;
   int v2 = *(int *)arg2;
+  return v1 - v2;
+}
+
+int compare_texts(void *arg1, void *arg2)
+{
+  size_t v1 = *(size_t *)arg1;
+  size_t v2 = *(size_t *)arg2;
   return v1 - v2;
 }
 
@@ -61,9 +70,10 @@ int compare_string(void *arg1, int arg1_max_length, void *arg2, int arg2_max_len
   return 0;
 }
 
-int compare_string_like(const std::string &s, const std::string &p) {
-  int m = s.size();
-  int n = p.size();
+int compare_string_like(const std::string &s, const std::string &p)
+{
+  int                           m = s.size();
+  int                           n = p.size();
   std::vector<std::vector<int>> dp(m + 1, std::vector<int>(n + 1));
   dp[0][0] = true;
   for (int i = 1; i <= n; ++i) {
@@ -95,4 +105,3 @@ int compare_date(void *arg1, void *arg2)
 }
 // 1010100000001 0000011111100100
 }  // namespace common
-

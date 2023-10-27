@@ -19,9 +19,10 @@ See the Mulan PSL v2 for more details. */
 namespace common {
 
 int compare_int(void *arg1, void *arg2);
+int compare_texts(void *arg1, void *arg2);
 int compare_float(void *arg1, void *arg2);
 int compare_string(void *arg1, int arg1_max_length, void *arg2, int arg2_max_length);
 int compare_date(void *arg1, void *arg2);
 int compare_string_like(const std::string &s, const std::string &p);
 
-}
+}  // namespace common

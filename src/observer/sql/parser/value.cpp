@@ -28,7 +28,7 @@ const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "boolean
 
 const char *attr_type_to_string(AttrType type)
 {
-  if (type >= UNDEFINED && type <= DATES) {
+  if (type >= UNDEFINED && type <= TEXTS) {
     return ATTR_TYPE_NAME[type];
   }
   return "unknown";
@@ -229,6 +229,9 @@ int Value::compare(const Value &other) const
 
   if (this->attr_type_ == other.attr_type_) {
     switch (this->attr_type_) {
+      case TEXTS: {
+        return common::compare_texts((void *)&this->text_hash_, (void *)&other.text_hash_);
+      } break;
       case INTS: {
         return common::compare_int((void *)&this->num_value_.int_value_, (void *)&other.num_value_.int_value_);
       } break;

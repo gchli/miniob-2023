@@ -39,7 +39,7 @@ RC ParseStage::handle_request(SQLStageEvent *sql_event)
   ParsedSqlResult parsed_sql_result;
 
   parse(sql.c_str(), &parsed_sql_result);
-  sql_debug("%s\n", sql.c_str());
+  // sql_debug("%s\n", sql.c_str());
 
   if (parsed_sql_result.sql_nodes().empty()) {
     sql_result->set_return_code(RC::SUCCESS);
