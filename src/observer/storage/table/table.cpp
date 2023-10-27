@@ -383,8 +383,9 @@ RC Table::make_update_record(Record &new_record, Record &old_record, const std::
     if (field->type() != value.attr_type()) {
       if (field->type() == TEXTS && value.attr_type() == CHARS) {
         string val_str(std::move(value.get_string()));
-        if (val_str.size() > 65536) {
-          val_str = val_str.substr(0, 65536);
+        if (val_str.size() > 65535) {
+          // val_str = val_str.substr(0, 65536);
+          return RC::INVALID_ARGUMENT;
         }
         size_t text_hash = std::hash<std::string>()(val_str);
         if (text_hashmap_.find(text_hash) == text_hashmap_.end()) {
@@ -503,8 +504,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     }
     if (field->type() == TEXTS && value.attr_type() == CHARS) {
       string val_str(std::move(value.get_string()));
-      if (val_str.size() > 65536) {
-        val_str = val_str.substr(0, 65536);
+      if (val_str.size() > 65535) {
+        return RC::INVALID_ARGUMENT;
+        // val_str = val_str.substr(0, 65536);
       }
       size_t text_hash = std::hash<std::string>()(val_str);
       if (text_hashmap_.find(text_hash) == text_hashmap_.end()) {
