@@ -210,10 +210,14 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     }
   }
 
-  ProjectPhysicalOperator              *project_operator    = new ProjectPhysicalOperator;
-  const vector<shared_ptr<Expression>> &project_fileds_expr = project_oper.proj_exprs();
-  for (const auto &expr : project_fileds_expr) {
-    project_operator->add_projection(expr->get_field().table(), expr->get_field().meta());
+  ProjectPhysicalOperator              *project_operator = new ProjectPhysicalOperator;
+  const vector<shared_ptr<Expression>> &project_expr     = project_oper.proj_exprs();
+  for (const auto &expr : project_expr) {
+    if (expr->type() == ExprType::FUNCTION) {
+      project_operator->add_projection(expr->name(), dynamic_pointer_cast<FunctionExpr>(expr));
+    } else if (expr->type() == ExprType::FIELD) {
+      project_operator->add_projection(expr->get_field().table(), expr->get_field().meta());
+    }
   }
   if (child_phy_oper) {
     project_operator->add_child(std::move(child_phy_oper));

@@ -119,6 +119,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         GROUP
         IN_T
         EXIST_T
+        LENGTH
+        DATE_FORMAT
+        ROUND
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -128,8 +132,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   enum CompOp                       comp;
   enum CondOp                       join_op;
   enum AggrType                     aggr_t;
+  enum FuncType                     func_t;
   enum OrderType                    order_t;
   RelAttrSqlNode *                  aggr_func;
+  RelAttrSqlNode *                  normal_func;
   RelAttrSqlNode *                  rel_attr;
   std::vector<AttrInfoSqlNode> *    attr_infos;
   AttrInfoSqlNode *                 attr_info;
@@ -165,6 +171,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <number>              type
 %type <aggr_t>              aggr_type
 %type <aggr_func>           aggr_func
+%type <func_t>              func_type
+%type <normal_func>         normal_func
+%type <string>              alias_optional;
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
@@ -475,6 +484,96 @@ type:
     | DATE_T   { $$=DATES; }
     /* | TEXT_T   { $$=TEXTS; } */
     ;
+
+func_type:
+    LENGTH { $$=LENGTH_T; }
+    | DATE_FORMAT { $$=DATE_FORMAT_T; }
+    | ROUND { $$=ROUND_T; }
+    ;
+
+normal_func:
+    func_type LBRACE rel_attr RBRACE alias_optional
+    {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+
+      $$->is_func = true;
+      $$->func_type = $1;
+      $$->first_func_arg.is_valid = true;
+      $$->first_func_arg.is_attr = true;
+      $$->first_func_arg.relation_name = $3->relation_name;
+      $$->first_func_arg.attribute_name = $3->attribute_name;
+
+      $$->second_func_arg.is_valid = false;
+
+      $$->alias = $5;
+
+      free($3);
+    }
+    |
+    func_type LBRACE rel_attr COMMA value RBRACE alias_optional
+    {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+
+      $$->is_func = true;
+      $$->func_type = $1;
+      $$->first_func_arg.is_valid = true;
+      $$->first_func_arg.is_attr = true;
+      $$->first_func_arg.relation_name = $3->relation_name;
+      $$->first_func_arg.attribute_name = $3->attribute_name;
+
+      $$->second_func_arg.is_valid = true;
+      $$->second_func_arg.is_attr = false;
+      $$->second_func_arg.value = *$5;
+      $$->alias = $7;
+
+      free($3);
+      free($5);
+
+    }
+    |
+    func_type LBRACE value RBRACE alias_optional
+    {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+
+      $$->is_func = true;
+      $$->func_type = $1;
+      $$->first_func_arg.is_valid = true;
+      $$->first_func_arg.is_attr = false;
+      $$->first_func_arg.value = *$3;
+
+      $$->second_func_arg.is_valid = false;
+
+      $$->alias = $5;
+
+      free($3);
+
+    }
+    |
+    func_type LBRACE value COMMA value RBRACE alias_optional
+    {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+
+      $$->is_func = true;
+      $$->func_type = $1;
+      $$->first_func_arg.is_valid = true;
+      $$->first_func_arg.is_attr = false;
+      $$->first_func_arg.value = *$3;
+
+      $$->second_func_arg.is_valid = true;
+      $$->second_func_arg.is_attr = false;
+      $$->second_func_arg.value = *$5;
+      $$->alias = $7;
+
+      free($3);
+      free($5);
+
+    }
+    ;
+
 aggr_type:
     MAX { $$=MAX_T; }
     | MIN { $$=MIN_T; }
@@ -572,6 +671,7 @@ value_list:
       delete $2;
     }
     ;
+
 value:
     NUMBER {
       $$ = new Value((int)$1);
@@ -662,6 +762,7 @@ select_stmt:        /*  select 语句的语法解析树*/
       $$->selection = *$1;
       delete $1;
     }
+    ;
 
 select_body:
     SELECT select_attr FROM ID rel_list inner_join_list where group_by having order_by
@@ -713,6 +814,15 @@ select_body:
       std::reverse($$->order_bys.begin(), $$->order_bys.end());
       free($4);
     }
+    |
+    SELECT select_attr // for functions (and expression)
+    {
+      $$ = new SelectSqlNode;
+      if ($2 != nullptr) {
+        $$->attributes.swap(*$2);
+        delete $2;
+      }
+    }
     ;
 
 calc_stmt:
@@ -724,7 +834,6 @@ calc_stmt:
       delete $2;
     }
     ;
-
 
 expression_list:
     expression
@@ -798,16 +907,41 @@ select_attr:
       $$->emplace_back(*$1);
       delete $1;
       }
+    | normal_func attr_list {
+      if ($2 != nullptr) {
+        $$ = $2;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$1);
+      delete $1;
+    }
     ;
 
+alias_optional:
+    {
+      $$ = strdup("");
+    }
+    | ID
+    {
+      $$ = strdup($1);
+      free($1);
+    }
+    | AS ID {
+      $$ = strdup($2);
+      free($2);
+    }
+    ;
+
+
 rel_attr:
-    ID {
+    ID alias_optional {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->attribute_name = $1;
       free($1);
     }
-    | ID DOT ID {
+    | ID DOT ID alias_optional {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->relation_name  = $1;
@@ -833,6 +967,16 @@ attr_list:
       delete $2;
     }
     | COMMA aggr_func attr_list {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+
+      $$->emplace_back(*$2);
+      delete $2;
+    }
+    | COMMA normal_func attr_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
@@ -952,9 +1096,19 @@ group_by:
         $$ = new std::vector<RelAttrSqlNode>;
       }
       $$->emplace_back(*$3);
-      delete $4;
+      delete $3;
+      }
+    | GROUP BY normal_func attr_list {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$3);
+      delete $3;
       }
     ;
+
 inner_join_list:
     {
       $$ = nullptr;
@@ -1065,6 +1219,54 @@ condition:
       $$->left_value = *$1;
       $$->right_is_attr = 1;
       $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | normal_func comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | rel_attr comp_op normal_func
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | value comp_op normal_func
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | normal_func comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
       $$->comp = $2;
 
       delete $1;

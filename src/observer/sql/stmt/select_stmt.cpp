@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/select_stmt.h"
+#include "common/rc.h"
 #include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
@@ -82,10 +83,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     tables.push_back(table);
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
   }
+
   // collect tables in join statements
-
   // create join statement
-
   for (size_t i = 0; i < select_sql.joins.size(); i++) {
     const InnerJoinSqlNode &join_node       = select_sql.joins[i];
     const char             *join_table_name = join_node.relation_name.c_str();
@@ -124,10 +124,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         LOG_WARN("fail to create filter for join.");
         return rc;
       }
-      // table_map.insert(std::pair<std::string, Table *>(table_name, join_table));
       auto join_stmt = make_shared<JoinStmt>(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
       join_stmts.push_back(join_stmt);
-      // join_stmts.emplace_back(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
     }
   }
 
@@ -137,6 +135,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
+    // create aggregate expressions
     if (relation_attr.is_aggr) {
       AggrType    aggr_type  = relation_attr.aggr_type;
       const char *table_name = relation_attr.relation_name.c_str();
@@ -178,7 +177,21 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       }
       continue;
     }
+    // create function expressions
+    if (relation_attr.is_func) {
+      shared_ptr<FunctionExpr> func_expr{nullptr};
+      Table                   *default_table = tables.size() > 0 ? tables[0] : nullptr;
+      RC rc = FunctionExpr::create_func_expr(db, relation_attr, default_table, &table_map, func_expr);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      if (func_expr != nullptr) {
+        query_exprs.emplace_back(func_expr);
+      }
+      continue;
+    }
 
+    // create field expressions
     if (common::is_blank(relation_attr.relation_name.c_str()) &&
         0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
       for (Table *table : tables) {
@@ -240,6 +253,20 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   // create filter statement in `where` statement
+  if (!select_sql.conditions.empty()) {
+    FilterStmt *filter_stmt = nullptr;
+    RC          rc          = FilterStmt::create(db,
+        default_table,
+        &table_map,
+        select_sql.conditions.data(),
+        static_cast<int>(select_sql.conditions.size()),
+        filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+    LOG_INFO("got filter stmt");
+  }
   FilterStmt *filter_stmt = nullptr;
   RC          rc          = FilterStmt::create(db,
       default_table,

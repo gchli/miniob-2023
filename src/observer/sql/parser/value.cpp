@@ -92,6 +92,7 @@ void Value::set_int(int val)
   attr_type_            = INTS;
   num_value_.int_value_ = val;
   length_               = sizeof(val);
+  this->null            = false;
 }
 
 void Value::set_float(float val)
@@ -99,12 +100,14 @@ void Value::set_float(float val)
   attr_type_              = FLOATS;
   num_value_.float_value_ = val;
   length_                 = sizeof(val);
+  this->null              = false;
 }
 void Value::set_boolean(bool val)
 {
   attr_type_             = BOOLEANS;
   num_value_.bool_value_ = val;
   length_                = sizeof(val);
+  this->null             = false;
 }
 void Value::set_string(const char *s, int len /*= 0*/)
 {
@@ -115,7 +118,8 @@ void Value::set_string(const char *s, int len /*= 0*/)
   } else {
     str_value_.assign(s);
   }
-  length_ = str_value_.length();
+  length_    = str_value_.length();
+  this->null = false;
 }
 
 void Value::set_text_hash(size_t val)
@@ -123,6 +127,7 @@ void Value::set_text_hash(size_t val)
   attr_type_ = TEXTS;
   text_hash_ = val;
   length_    = sizeof(val);
+  this->null = false;
 }
 
 void Value::set_date(date_u d)
@@ -130,10 +135,12 @@ void Value::set_date(date_u d)
   attr_type_  = DATES;
   date_value_ = d;
   length_     = sizeof(date_u);
+  this->null  = false;
 }
 
 void Value::set_value(const Value &value)
 {
+  this->null = false;
   switch (value.attr_type_) {
     case INTS: {
       set_int(value.get_int());

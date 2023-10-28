@@ -134,6 +134,17 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
         return aggr_expr->field().attr_type();
       }
     }
+    if (expr->type() == ExprType::FUNCTION) {
+      const auto &func_expr = dynamic_pointer_cast<FunctionExpr>(expr);
+      if (func_expr->function_type() == LENGTH_T) {
+        return INTS;
+      } else if (func_expr->function_type() == ROUND_T) {
+        return FLOATS;
+      } else if (func_expr->function_type() == DATE_FORMAT_T) {
+        return CHARS;
+      }
+    }
+
     return obj.field.attr_type();
   };
 
@@ -221,30 +232,41 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       filter_unit->set_left(filter_obj);
     }
   } else if (condition.left_is_attr) {
-    Table           *table = nullptr;
-    const FieldMeta *field = nullptr;
-
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
-    if (rc != RC::SUCCESS) {
-      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
-        table = default_table;
-        field = new FieldMeta("*");
-        rc    = RC::SUCCESS;
-      }
-      if (table == nullptr || field == nullptr) {
-        LOG_WARN("cannot find attr");
+    if (condition.left_attr.is_func) {
+      shared_ptr<FunctionExpr> func_expr{nullptr};
+      RC rc = FunctionExpr::create_func_expr(db, condition.left_attr, default_table, tables, func_expr);
+      if (rc != RC::SUCCESS) {
         return rc;
       }
-    }
-    FilterObj filter_obj;
-    if (condition.left_attr.is_aggr) {
-      AggrType aggr_type = condition.left_attr.aggr_type;
-      filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+      FilterObj filter_obj;
+      filter_obj.init_expr(func_expr);
+      filter_unit->set_left(filter_obj);
     } else {
-      filter_obj.init_attr(Field(table, field));
-    }
+      Table           *table = nullptr;
+      const FieldMeta *field = nullptr;
 
-    filter_unit->set_left(filter_obj);
+      rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
+      if (rc != RC::SUCCESS) {
+        if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
+          table = default_table;
+          field = new FieldMeta("*");
+          rc    = RC::SUCCESS;
+        }
+        if (table == nullptr || field == nullptr) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+      }
+      FilterObj filter_obj;
+      if (condition.left_attr.is_aggr) {
+        AggrType aggr_type = condition.left_attr.aggr_type;
+        filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+      } else {
+        filter_obj.init_attr(Field(table, field));
+      }
+
+      filter_unit->set_left(filter_obj);
+    }
   } else {
     FilterObj filter_obj;
     if (condition.left_value.attr_type() == DATES && !is_date_valid(condition.left_value.get_string())) {
@@ -293,28 +315,40 @@ right:
       }
     }
   } else if (condition.right_is_attr) {
-    Table           *table = nullptr;
-    const FieldMeta *field = nullptr;
-    rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
-    if (rc != RC::SUCCESS) {
-      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
-        table = default_table;
-        field = new FieldMeta("*");
-        rc    = RC::SUCCESS;
-      }
-      if (table == nullptr || field == nullptr) {
-        LOG_WARN("cannot find attr");
+
+    if (condition.right_attr.is_func) {
+      shared_ptr<FunctionExpr> func_expr{nullptr};
+      RC rc = FunctionExpr::create_func_expr(db, condition.right_attr, default_table, tables, func_expr);
+      if (rc != RC::SUCCESS) {
         return rc;
       }
-    }
-    FilterObj filter_obj;
-    if (condition.left_attr.is_aggr) {
-      AggrType aggr_type = condition.left_attr.aggr_type;
-      filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+      FilterObj filter_obj;
+      filter_obj.init_expr(func_expr);
+      filter_unit->set_left(filter_obj);
     } else {
-      filter_obj.init_attr(Field(table, field));
+      Table           *table = nullptr;
+      const FieldMeta *field = nullptr;
+      rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
+      if (rc != RC::SUCCESS) {
+        if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
+          table = default_table;
+          field = new FieldMeta("*");
+          rc    = RC::SUCCESS;
+        }
+        if (table == nullptr || field == nullptr) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+      }
+      FilterObj filter_obj;
+      if (condition.left_attr.is_aggr) {
+        AggrType aggr_type = condition.left_attr.aggr_type;
+        filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+      } else {
+        filter_obj.init_attr(Field(table, field));
+      }
+      filter_unit->set_right(filter_obj);
     }
-    filter_unit->set_right(filter_obj);
   } else {
     FilterObj filter_obj;
     filter_obj.init_value(condition.right_value);

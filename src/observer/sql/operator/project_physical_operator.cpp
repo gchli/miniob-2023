@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 
 RC ProjectPhysicalOperator::open(Trx *trx)
 {
+  is_ended_ = false;
   if (children_.empty()) {
     return RC::SUCCESS;
   }
@@ -38,9 +39,15 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
+
   if (children_.empty()) {
+    if (!is_ended_) {
+      is_ended_ = true;
+      return RC::SUCCESS;
+    }
     return RC::RECORD_EOF;
   }
+
   return children_[0]->next();
 }
 
@@ -54,7 +61,11 @@ RC ProjectPhysicalOperator::close()
 
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  tuple_.set_tuple(children_[0]->current_tuple());
+  if (children_.empty()) {
+    tuple_.set_tuple(new RowTuple());
+  } else {
+    tuple_.set_tuple(children_[0]->current_tuple());
+  }
   return &tuple_;
 }
 
@@ -64,4 +75,22 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   // 对多表查询来说，展示的alias 需要带表名字
   TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
   tuple_.add_cell_spec(spec);
+}
+
+void ProjectPhysicalOperator::add_projection(const std::string &alias)
+{
+  TupleCellSpec *spec = new TupleCellSpec(alias.c_str());
+  tuple_.add_cell_spec(spec);
+}
+
+void ProjectPhysicalOperator::add_projection(const std::string &alias, shared_ptr<Expression> expr)
+{
+  TupleCellSpec *spec = new TupleCellSpec(alias.c_str());
+  spec->set_expr(expr);
+  tuple_.add_cell_spec(spec);
+}
+
+void ProjectPhysicalOperator::add_function_expr(const shared_ptr<FunctionExpr> &func_expr)
+{
+  function_exprs.push_back(func_expr);
 }

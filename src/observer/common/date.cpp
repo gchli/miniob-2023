@@ -2,6 +2,7 @@
 #include "date.h"
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 
 int max_days_per_month[13] = {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -62,4 +63,50 @@ std::string date_to_str(const date_u &date)
   // std::format
   sprintf(data_chars, "%04d-%02d-%02d", date.year, date.month, date.day);
   return string(data_chars);
+}
+
+RC format_to_date(const date_u &date, const string &date_format, string &date_str)
+{
+  int               year = date.year, month = date.month, day = date.day;
+  std::stringstream ss;
+  string      month_string[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  std::string day_postfix[10]  = {"st", "nd", "rd", "th", "th", "th", "th", "th", "th", "th"};
+
+  for (size_t i = 0; i < date_format.size();) {
+    if (date_format[i] == '%') {
+      if (i == date_format.size() - 1) {
+        continue;
+      }
+      auto next_char = date_format[i + 1];
+      if (next_char == 'Y') {
+        ss << year;
+      } else if (next_char == 'y') {
+        ss << year % 100;
+      } else if (next_char == 'M') {
+        ss << month_string[month - 1];
+      } else if (next_char == 'm') {
+        if (month < 10) {
+          ss << "0";
+        }
+        ss << month;
+      } else if (next_char == 'D') {
+        ss << day << day_postfix[day % 10 - 1];
+      } else if (next_char == 'd') {
+        if (day < 10) {
+          ss << "0";
+        }
+        ss << day;
+      } else {
+        ss << date_format[i];
+        i++;
+        continue;
+      }
+      i += 2;
+    } else {
+      ss << date_format[i];
+      i++;
+    }
+  }
+  date_str = ss.str();
+  return RC::SUCCESS;
 }

@@ -78,7 +78,11 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
           schema.append_cell(aggr_expr->name(with_table_name).c_str());
           continue;
         }
-
+        if (expr->type() == ExprType::FUNCTION) {
+          auto func_expr = dynamic_pointer_cast<FunctionExpr>(expr);
+          schema.append_cell(func_expr->name().c_str());
+          continue;
+        }
         if (expr->type() == ExprType::FIELD) {
           auto field_expr = dynamic_pointer_cast<FieldExpr>(expr);
           if (with_table_name) {

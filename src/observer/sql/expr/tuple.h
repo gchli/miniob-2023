@@ -265,16 +265,29 @@ public:
     }
 
     const TupleCellSpec *spec = speces_[index];
+    if (spec->expr() != nullptr) {
+      return spec->expr()->get_value(*tuple_, cell);
+    }
     return tuple_->find_cell(*spec, cell);
   }
 
-  RC     find_cell(const TupleCellSpec &spec, Value &cell) const override { return tuple_->find_cell(spec, cell); }
+  RC find_cell(const TupleCellSpec &spec, Value &cell) const override
+  {
+    if (spec.expr() != nullptr) {
+      return spec.expr()->get_value(*tuple_, cell);
+    }
+    return tuple_->find_cell(spec, cell);
+  }
   Tuple *copy() const override
   {
     ProjectTuple *new_tuple = new ProjectTuple();
     new_tuple->tuple_       = tuple_->copy();
     for (const TupleCellSpec *spec : speces_) {
-      new_tuple->add_cell_spec(new TupleCellSpec(spec->table_name(), spec->field_name(), spec->alias()));
+      auto tcs = new TupleCellSpec(spec->table_name(), spec->field_name(), spec->alias());
+      if (spec->expr() != nullptr) {
+        tcs->set_expr(spec->expr());
+      }
+      new_tuple->add_cell_spec(tcs);
     }
     return new_tuple;
   }
