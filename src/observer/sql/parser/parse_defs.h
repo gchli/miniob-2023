@@ -54,8 +54,8 @@ enum OrderType
 
 struct FuncArgSqlNode
 {
-  bool        is_valid;
-  bool        is_attr;
+  bool        is_valid{false};
+  bool        is_attr{false};
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
   Value       value;
@@ -73,10 +73,10 @@ struct RelAttrSqlNode
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
 
-  bool     is_aggr;
+  bool     is_aggr{false};
   AggrType aggr_type;
 
-  bool           is_func;
+  bool           is_func{false};
   FuncType       func_type;
   FuncArgSqlNode first_func_arg;
   FuncArgSqlNode second_func_arg;

@@ -324,7 +324,7 @@ right:
       }
       FilterObj filter_obj;
       filter_obj.init_expr(func_expr);
-      filter_unit->set_left(filter_obj);
+      filter_unit->set_right(filter_obj);
     } else {
       Table           *table = nullptr;
       const FieldMeta *field = nullptr;

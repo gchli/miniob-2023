@@ -215,6 +215,7 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
   for (const auto &expr : project_expr) {
     if (expr->type() == ExprType::FUNCTION) {
       project_operator->add_projection(expr->name(), dynamic_pointer_cast<FunctionExpr>(expr));
+      project_operator->add_function_expr(dynamic_pointer_cast<FunctionExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
       project_operator->add_projection(expr->get_field().table(), expr->get_field().meta());
     }

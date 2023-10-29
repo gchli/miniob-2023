@@ -39,12 +39,16 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
-
-  if (children_.empty()) {
+  if (children_.empty() && !function_exprs.empty()) {
     if (!is_ended_) {
       is_ended_ = true;
       return RC::SUCCESS;
     }
+    return RC::RECORD_EOF;
+  }
+
+  if (children_.empty()) {
+
     return RC::RECORD_EOF;
   }
 
@@ -61,7 +65,7 @@ RC ProjectPhysicalOperator::close()
 
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  if (children_.empty()) {
+  if (children_.empty() && !function_exprs.empty()) {
     tuple_.set_tuple(new RowTuple());
   } else {
     tuple_.set_tuple(children_[0]->current_tuple());

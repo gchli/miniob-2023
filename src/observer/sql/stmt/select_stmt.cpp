@@ -253,20 +253,20 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   // create filter statement in `where` statement
-  if (!select_sql.conditions.empty()) {
-    FilterStmt *filter_stmt = nullptr;
-    RC          rc          = FilterStmt::create(db,
-        default_table,
-        &table_map,
-        select_sql.conditions.data(),
-        static_cast<int>(select_sql.conditions.size()),
-        filter_stmt);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot construct filter stmt");
-      return rc;
-    }
-    LOG_INFO("got filter stmt");
-  }
+  // if (!select_sql.conditions.empty()) {
+  //   FilterStmt *filter_stmt = nullptr;
+  //   RC          rc          = FilterStmt::create(db,
+  //       default_table,
+  //       &table_map,
+  //       select_sql.conditions.data(),
+  //       static_cast<int>(select_sql.conditions.size()),
+  //       filter_stmt);
+  //   if (rc != RC::SUCCESS) {
+  //     LOG_WARN("cannot construct filter stmt");
+  //     return rc;
+  //   }
+  //   LOG_INFO("got filter stmt");
+  // }
   FilterStmt *filter_stmt = nullptr;
   RC          rc          = FilterStmt::create(db,
       default_table,
