@@ -141,7 +141,7 @@ RC format_to_date(const date_u &date, const string &date_format, string &date_st
         }
         ss << day;
       } else {
-        ss << date_format[i];
+        // ss << date_format[i];
         i++;
         continue;
       }
