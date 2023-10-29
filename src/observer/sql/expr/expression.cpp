@@ -204,6 +204,10 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     return RC::SUCCESS;
   }
 
+  if (dynamic_cast<ValuesExpr*>(left_.get()) != nullptr && dynamic_cast<ValuesExpr*>(right_.get()) != nullptr) {
+    return RC::INVALID_ARGUMENT;
+  }
+
   RC rc = left_->get_value(tuple, left_value);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));

@@ -204,13 +204,15 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   const TupleSchema &schema   = sql_result->tuple_schema();
   const int          cell_num = schema.cell_num();
 
+  std::string header;
   for (int i = 0; i < cell_num; i++) {
     const TupleCellSpec &spec  = schema.cell_at(i);
     const char          *alias = spec.alias();
     if (nullptr != alias || alias[0] != 0) {
       if (0 != i) {
         const char *delim = " | ";
-        rc                = writer_->writen(delim, strlen(delim));
+        // rc                = writer_->writen(delim, strlen(delim));
+        header = header += delim;
         if (OB_FAIL(rc)) {
           LOG_WARN("failed to send data to client. err=%s", strerror(errno));
           return rc;
@@ -218,7 +220,8 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
       }
 
       int len = strlen(alias);
-      rc      = writer_->writen(alias, len);
+      // rc      = writer_->writen(alias, len);
+      header = header + alias;
       if (OB_FAIL(rc)) {
         LOG_WARN("failed to send data to client. err=%s", strerror(errno));
         sql_result->close();
@@ -229,7 +232,8 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   if (cell_num > 0) {
     char newline = '\n';
-    rc           = writer_->writen(&newline, 1);
+    // rc           = writer_->writen(&newline, 1);
+    header = header + newline;
     if (OB_FAIL(rc)) {
       LOG_WARN("failed to send data to client. err=%s", strerror(errno));
       sql_result->close();
@@ -239,7 +243,17 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   rc           = RC::SUCCESS;
   Tuple *tuple = nullptr;
+  bool first = true;
   while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
+    if (first) {
+      rc = writer_->writen(header.data(), header.size());
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+      first = false;
+    }
     assert(tuple != nullptr);
 
     int cell_num = tuple->cell_num();
@@ -304,6 +318,22 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   if (rc == RC::RECORD_EOF) {
     rc = RC::SUCCESS;
+  }
+
+  if (rc == RC::SUCCESS && first) {
+    rc = writer_->writen(header.data(), header.size());
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+      sql_result->close();
+      return rc;
+    }
+    first = false;
+  }
+
+  if (rc != RC::SUCCESS) {
+    sql_result->close();
+    sql_result->set_return_code(rc);
+    return write_state(event, need_disconnect);
   }
 
   if (cell_num == 0) {

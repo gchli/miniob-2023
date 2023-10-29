@@ -132,6 +132,10 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
       return false;
     if (is_right_values && filter_unit.right().values_.size() != 1)
       return false;
+    // if (is_left_values && filter_unit.right().is_select()) {
+    //   auto select_stmt = dynamic_cast<SelectStmt*>(filter_unit.right().select_stmt_.get());
+    //   select_stmt->
+    // }
   }
 
   bool is_left_attr  = filter_unit.left().is_attr();

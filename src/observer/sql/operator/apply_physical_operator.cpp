@@ -109,11 +109,17 @@ RC ApplyPhysicalOperator::next() {
                 } else {
                     right_expr = make_unique<ValuesExpr>(values);
                 }
+                if (!is_values_op(op) && values.size() != 1) {
+                    return RC::INVALID_ARGUMENT;
+                }
                 // right_expr = make_unique<ValueExpr>(value);
             }
             auto new_comp = ComparisonExpr(op, std::move(left_expr), std::move(right_expr));
             Value value;
-            new_comp.get_value(*tuple, value);
+            rc = new_comp.get_value(*tuple, value);
+            if (rc != RC::SUCCESS) {
+                return rc;
+            }
             if (!value.get_boolean()) {
                 is_all_true = false;
             } else {
