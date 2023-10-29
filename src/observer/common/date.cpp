@@ -69,8 +69,19 @@ RC format_to_date(const date_u &date, const string &date_format, string &date_st
 {
   int               year = date.year, month = date.month, day = date.day;
   std::stringstream ss;
-  string      month_string[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  std::string day_postfix[10]  = {"st", "nd", "rd", "th", "th", "th", "th", "th", "th", "th"};
+  string            month_string[12] = {"January",
+                 "February",
+                 "March",
+                 "April",
+                 "May",
+                 "June",
+                 "July",
+                 "August",
+                 "September",
+                 "October",
+                 "November",
+                 "December"};
+  std::string       day_postfix[10]  = {"st", "nd", "rd", "th", "th", "th", "th", "th", "th", "th"};
 
   for (size_t i = 0; i < date_format.size();) {
     if (date_format[i] == '%') {
