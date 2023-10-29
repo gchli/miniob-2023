@@ -58,7 +58,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc                      = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, find_ctx);
+    rc                      = create_filter_unit(db, default_table, tables, tables_alias, conditions[i], filter_unit, find_ctx);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
