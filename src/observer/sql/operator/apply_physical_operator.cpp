@@ -13,16 +13,6 @@
 #include "storage/trx/trx.h"
 #include <memory>
 
-RC ApplyPhysicalOperator::open(Trx *trx) {
-    auto &left_child = children_[0];
-    RC rc = left_child->open(trx);
-    if (rc != RC::SUCCESS) {
-        return rc;
-    }
-    trx_ = trx;
-    return RC::SUCCESS;
-}
-
 RC ApplySubselect(shared_ptr<Stmt> stmt, std::vector<Value> &values) {
     RC rc = RC::SUCCESS;
     auto select_stmt = dynamic_cast<SelectStmt*>(stmt.get());
@@ -59,18 +49,16 @@ RC ApplySubselect(shared_ptr<Stmt> stmt, std::vector<Value> &values) {
     return rc;
 }
 
-RC ApplyPhysicalOperator::next() {
-    /**
-     1. left child next
-     2. put left tuple to CTX
-     3. for expr:
-        3.1 build stmt(other create), logical, physical
-        3.2 expr get value
-     4. return tuple if right return true
-     5. loop left until right return true
-    */
+RC ApplyPhysicalOperator::open(Trx *trx) {
+    auto &left_child = children_[0];
+    RC rc = left_child->open(trx);
+    if (rc != RC::SUCCESS) {
+        return rc;
+    }
+    trx_ = trx;
+
     auto &table_oper = children_[0];
-    RC rc = RC::SUCCESS;
+    rc = RC::SUCCESS;
     auto &ctx = FilterCtx::get_instance();
     while ((rc = table_oper->next()) == RC::SUCCESS) {
         Tuple *tuple = table_oper->current_tuple();
@@ -128,13 +116,29 @@ RC ApplyPhysicalOperator::next() {
         }
 
         if (is_true && !is_and_) {
-            tuple_ = tuple;
-            return RC::SUCCESS;
+            tuples_.emplace_back(tuple->copy());
+        } else if (is_all_true && is_and_) {
+            tuples_.emplace_back(tuple->copy());
         }
-        if (is_all_true && is_and_) {
-            tuple_ = tuple;
-            return RC::SUCCESS;
-        }
+    }
+    return RC::SUCCESS;
+}
+
+
+
+RC ApplyPhysicalOperator::next() {
+    /**
+     1. left child next
+     2. put left tuple to CTX
+     3. for expr:
+        3.1 build stmt(other create), logical, physical
+        3.2 expr get value
+     4. return tuple if right return true
+     5. loop left until right return true
+    */
+    if (tuple_idx_ < tuples_.size()) {
+        tuple_ = tuples_[tuple_idx_++].get();
+        return RC::SUCCESS;
     }
     return RC::RECORD_EOF;
 }

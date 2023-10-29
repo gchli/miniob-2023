@@ -24,4 +24,6 @@ private:
   bool is_and_;
   Trx *trx_;
   Tuple *tuple_;
+  int tuple_idx_ = 0;
+  std::vector<shared_ptr<Tuple>> tuples_;
 };
