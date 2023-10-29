@@ -152,10 +152,18 @@ public:
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode *conditions, int condition_num,
+      FilterStmt *&stmt, bool find_ctx=false);
+
+  static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx=false);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx=false);
+
+  static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode &condition,
+      FilterUnit *&filter_unit, bool find_ctx=false);
 
 private:
   static bool               check_comparable(FilterUnit &filter_unit);

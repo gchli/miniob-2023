@@ -25,3 +25,4 @@ bool        is_date_valid(const string &date_str);
 RC          str_to_date(const char *date_chars, date_u &date);
 RC          str_to_date(const std::string &date_chars, date_u &date);
 std::string date_to_str(const date_u &date);
+RC          format_to_date(const date_u &date, const string &date_format, string &date_str);

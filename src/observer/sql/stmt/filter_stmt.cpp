@@ -32,6 +32,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include <memory>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 FilterStmt::~FilterStmt()
@@ -43,7 +44,13 @@ FilterStmt::~FilterStmt()
 }
 
 RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx)
+      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx) {
+  return create(db, default_table, tables, nullptr, conditions, condition_num, stmt, find_ctx);
+}
+
+RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+    std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode *conditions, int condition_num,
+    FilterStmt *&stmt, bool find_ctx)
 {
   RC rc = RC::SUCCESS;
   stmt  = nullptr;
@@ -52,7 +59,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
     rc                      = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, find_ctx);
-    if (rc != RC::SUCCESS && rc != RC::NEED_SUB_SELECT) {
+    if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
       return rc;
@@ -65,7 +72,8 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
 }
 
 RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const RelAttrSqlNode &attr, Table *&table, const FieldMeta *&field, bool find_ctx, bool &from_ctx)
+    std::unordered_map<std::string, std::string> *tables_alias, const RelAttrSqlNode &attr, Table *&table,
+    const FieldMeta *&field, bool find_ctx, bool &from_ctx)
 {
   if (common::is_blank(attr.relation_name.c_str())) {
     table = default_table;
@@ -74,8 +82,13 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     if (iter != tables->end()) {
       table = iter->second;
     }
-  // }
-  // TODO(liyh): no context here, comment for sub-select
+  } else if (tables_alias != nullptr && tables_alias->find(attr.relation_name) != tables_alias->end()) {
+    // TODO(liyh): 如何处理子查询alias？
+    auto table_real_name = tables_alias->find(attr.relation_name)->second;
+    auto iter            = tables->find(table_real_name);
+    if (iter != tables->end()) {
+      table = iter->second;
+    }
   } else if (find_ctx) {
     FilterCtx &ctx = FilterCtx::get_instance();
     auto iter = ctx.table_names_.find(attr.relation_name);
@@ -156,6 +169,17 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
         return aggr_expr->field().attr_type();
       }
     }
+    if (expr->type() == ExprType::FUNCTION) {
+      const auto &func_expr = dynamic_pointer_cast<FunctionExpr>(expr);
+      if (func_expr->function_type() == LENGTH_T) {
+        return INTS;
+      } else if (func_expr->function_type() == ROUND_T) {
+        return FLOATS;
+      } else if (func_expr->function_type() == DATE_FORMAT_T) {
+        return CHARS;
+      }
+    }
+
     return obj.field.attr_type();
   };
 
@@ -201,7 +225,7 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx)
+    std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx)
 {
   RC rc = RC::SUCCESS;
 
@@ -226,9 +250,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     Stmt *select_stmt;
     rc = SelectStmt::create(db, *condition.left_select, select_stmt);
     FilterObj filter_obj;
-    if (rc == RC::NEED_SUB_SELECT || FilterCtx::get_instance().contain_sub_select) {
+    if (rc != RC::SUCCESS || FilterCtx::get_instance().contain_sub_select) {
       // FilterCtx是可能出现子查询的子查询，这时候最外层的create返回是true，但是不能求值出来
-      if (rc == RC::NEED_SUB_SELECT) {
+      if (rc != RC::SUCCESS) {
         rc = SelectStmt::create(db, *condition.left_select, select_stmt, true); // 带着ctx再创建一次
         if (rc != RC::SUCCESS) {
           LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
@@ -256,10 +280,20 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     filter_unit->set_left(filter_obj);
   } else if (condition.left_is_attr) {
+    if (condition.left_attr.is_func) {
+      shared_ptr<FunctionExpr> func_expr{nullptr};
+      RC rc = FunctionExpr::create_func_expr(db, condition.left_attr, default_table, tables, tables_alias, func_expr);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_expr(func_expr);
+      filter_unit->set_left(filter_obj);
+    } else {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     bool from_ctx = false;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field, find_ctx, from_ctx);
+    rc = get_table_and_field(db, default_table, tables, tables_alias, condition.left_attr, table, field, find_ctx, from_ctx);
     if (rc != RC::SUCCESS) {
       if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
         table = default_table;
@@ -282,7 +316,8 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       filter_obj.init_attr(Field(table, field));
     }
 
-    filter_unit->set_left(filter_obj);
+      filter_unit->set_left(filter_obj);
+    }
   } else {
     FilterObj filter_obj;
     if (condition.left_value.attr_type() == DATES && !is_date_valid(condition.left_value.get_string())) {
@@ -332,12 +367,22 @@ right:
     }
     filter_unit->set_right(filter_obj);
   } else if (condition.right_is_attr) {
+    if (condition.right_attr.is_func) {
+      shared_ptr<FunctionExpr> func_expr{nullptr};
+      RC rc = FunctionExpr::create_func_expr(db, condition.right_attr, default_table, tables, tables_alias, func_expr);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_expr(func_expr);
+      filter_unit->set_right(filter_obj);
+    } else {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     bool from_ctx = false;
-    rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field, find_ctx, from_ctx);
+    rc                     = get_table_and_field(db, default_table, tables, tables_alias, condition.right_attr, table, field, find_ctx, from_ctx);
     if (rc != RC::SUCCESS) {
-      if (condition.right_attr.is_aggr && condition.right_attr.aggr_type == COUNT_T) {
+      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
         table = default_table;
         field = new FieldMeta("*");
         rc    = RC::SUCCESS;
@@ -350,13 +395,14 @@ right:
     FilterObj filter_obj;
     if (from_ctx) {
       filter_obj.init_father_attr(Field(table, field));
-    } else if (condition.right_attr.is_aggr) {
-      AggrType aggr_type = condition.right_attr.aggr_type;
+    } else if (condition.left_attr.is_aggr) {
+      AggrType aggr_type = condition.left_attr.aggr_type;
       filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
     } else {
       filter_obj.init_attr(Field(table, field));
     }
     filter_unit->set_right(filter_obj);
+    }
   } else {
     FilterObj filter_obj;
     filter_obj.init_value(condition.right_value);
@@ -371,6 +417,12 @@ right:
     return RC::INVALID_ARGUMENT;
   }
   return rc;
+}
+
+RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx)
+{
+  return create_filter_unit(db, default_table, tables, nullptr, condition, filter_unit, find_ctx);
 }
 
 RC SubselctToResult(Stmt *select_stmt, std::vector<Value> &values, bool single_cell_need)

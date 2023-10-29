@@ -23,6 +23,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/tuple_cell.h"
 #include "sql/stmt/stmt.h"
+#include "sql/parser/parse_defs.h"
+#include "storage/db/db.h"
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
@@ -144,14 +146,20 @@ public:
 
   const char *field_name() const override { return field_.field_name(); }
 
-  RC get_value(const Tuple &tuple, Value &value) const override;
+  RC                get_value(const Tuple &tuple, Value &value) const override;
+  const std::string get_field_alias() const { return field_alias_; }
+  void              set_field_alias(const std::string &alias) { field_alias_ = alias; }
+  const std::string get_table_alias() const { return table_alias_; }
+  void              set_table_alias(const std::string &alias) { table_alias_ = alias; }
 
   std::unique_ptr<Expression> clone () const override {
     return std::make_unique<FieldExpr>(field_);
   }
 
 private:
-  Field field_;
+  Field       field_;
+  std::string field_alias_{""};
+  std::string table_alias_{""};
 };
 
 /**
@@ -161,7 +169,9 @@ private:
 class ValueExpr : public Expression
 {
 public:
-  ValueExpr() = default;
+  ValueExpr()                                  = default;
+  ValueExpr(const ValueExpr &other)            = default;
+  ValueExpr &operator=(const ValueExpr &other) = default;
   explicit ValueExpr(const Value &value) : value_(value) {}
 
   virtual ~ValueExpr() = default;
@@ -184,6 +194,7 @@ public:
   std::unique_ptr<Expression> clone () const override {
     return std::make_unique<ValueExpr>(value_);
   }
+  std::string name() const override { return value_.to_string(); }
 
 private:
   Value value_;
@@ -197,7 +208,7 @@ public:
 
   virtual ~ValuesExpr() = default;
 
-  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; };
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::SUCCESS; };
   RC try_get_value(Value &value) const override { return RC::INVALID_ARGUMENT; }
 
   ExprType type() const override { return ExprType::VALUES; }
@@ -441,33 +452,91 @@ private:
 
 class FunctionExpr : public Expression
 {
-public:
-  enum class Type
-  {
-    LENGTH,
-    ROUND,
-    DATE_FORMAT,
-  };
 
 public:
-  FunctionExpr(Type type, Expression *left, Expression *right);
-  FunctionExpr(Type type, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
+  // FunctionExpr(FuncType type, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
+  FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, std::string alias = "");
+  FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr,
+      const std::shared_ptr<Expression> &second_obj_expr, std::string alias = "");
   virtual ~FunctionExpr() = default;  // todo(ligch)
+  static RC   create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
+        std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+        shared_ptr<FunctionExpr> &func_expr);
+  ExprType    type() const override { return ExprType::FUNCTION; }
+  std::string name() const override;
+  std::string name(bool with_table) const;
+  AttrType    value_type() const override
+  {
+    if (function_type_ == LENGTH_T) {
+      return INTS;
+    } else if (function_type_ == ROUND_T) {
+      return FLOATS;
+    } else if (function_type_ == DATE_FORMAT_T) {
+      return CHARS;
+    }
+    return val_.attr_type();
+  }
 
-  ExprType type() const override { return ExprType::FUNCTION; }
+  RC get_value(const Tuple &tuple, Value &value) const override;
+  RC try_get_value(Value &value) const override
+  {
+    RC rc = RC::SUCCESS;
+    if (!val_.is_null()) {
+      value = val_;
+      return rc;
+    }
+    return RC::EMPTY;
+  }
 
-  AttrType value_type() const override;
+  shared_ptr<Expression> &get_first_expr() { return first_obj_expr_; }
+  ExprType                get_first_expr_type()
+  {
+    if (first_obj_expr_ == nullptr) {
+      return ExprType::NONE;
+    }
+    return first_obj_expr_->type();
+  }
+  shared_ptr<Expression> &get_second_expr() { return second_obj_expr_; }
+  ExprType                get_second_expr_type()
+  {
+    if (second_obj_expr_ == nullptr) {
+      return ExprType::NONE;
+    }
+    return second_obj_expr_->type();
+  }
+  std::string &get_alias() { return alias_; }
+  FuncType     function_type() const { return function_type_; }
+  bool         obj_is_val() const { return first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::VALUE; }
+  void         set_name(std::string name) override { alias_ = name; }
 
-  RC          get_value(const Tuple &tuple, Value &value) const override;
-  RC          try_get_value(Value &value) const override;
-  void        set_value(const Value &value) { val_ = value; }
-  Type        function_type() const { return function_type_; }
-  Expression *left() const { return left_; }
-  Expression *right() const { return right_; }
+  const char *table_name() const override
+  {
+    if (first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::FIELD) {
+      return first_obj_expr_->table_name();
+    }
+    return "";
+  }
+  const char *field_name() const override
+  {
+    if (first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::FIELD) {
+      return first_obj_expr_->table_name();
+    }
+    return "";
+  }
+  const Field get_field() const override
+  {
+    if (first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::FIELD) {
+      return first_obj_expr_->get_field();
+    }
+    return {};
+  }
 
 private:
-  Value       val_;
-  Type        function_type_;
-  Expression *left_{nullptr};
-  Expression *right_{nullptr};
+  FuncType function_type_{UNDEFINED_T};
+
+  shared_ptr<Expression> first_obj_expr_{nullptr};
+  shared_ptr<Expression> second_obj_expr_{nullptr};
+  std::string            alias_{""};
+
+  mutable Value val_;
 };

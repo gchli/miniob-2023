@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/date.h"
+#include "common/lang/string.h"
 #include "common/rc.h"
 #include "common/lang/comparator.h"
 #include "common/log/log.h"
@@ -21,6 +23,10 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "sql/parser/parse_defs.h"
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <memory>
 
 using namespace std;
 
@@ -182,16 +188,17 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   Value right_value;
 
   if (comp_ == IN || comp_ == IN_NOT) {
-    const auto &values = dynamic_cast<ValuesExpr*>(right_.get())->values();
-    bool in = false;
+    const auto &values = dynamic_cast<ValuesExpr *>(right_.get())->values();
+    bool        in     = false;
     for (const auto right_value : values) {
       bool result = false;
-      RC rc = left_->get_value(tuple, left_value);
+      RC   rc     = left_->get_value(tuple, left_value);
       if (rc != RC::SUCCESS) {
         LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
         return rc;
       }
-      if (left_value.compare(right_value) == 0) in = true;
+      if (left_value.compare(right_value) == 0)
+        in = true;
     }
     value.set_boolean(in ? (comp_ == IN) : (comp_ == IN_NOT));
     return RC::SUCCESS;
@@ -455,5 +462,248 @@ RC AggregateExpr::get_value(const Tuple &tuple, Value &value) const
 RC AggregateExpr::try_get_value(Value &value) const
 {
   value = val_;
+  return RC::SUCCESS;
+}
+
+FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, std::string alias)
+    : function_type_(type), first_obj_expr_(first_obj_expr), alias_(alias)
+{
+  val_.set_null();
+}
+
+FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr,
+    const std::shared_ptr<Expression> &second_obj_expr, std::string alias)
+    : function_type_(type), first_obj_expr_(first_obj_expr), second_obj_expr_(second_obj_expr), alias_(alias)
+{
+  val_.set_null();
+}
+
+RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  if (!val_.is_null()) {
+    value = val_;
+    return RC::SUCCESS;
+  }
+
+  if (function_type_ == LENGTH_T) {
+    Value first_val;
+    first_obj_expr_->get_value(tuple, first_val);
+    if (first_val.attr_type() != CHARS) {
+      LOG_WARN("length() can only be used on chars");
+      return RC::INVALID_ARGUMENT;
+    }
+    size_t length = strlen(first_val.data());
+    // val_.set_int(static_cast<int>(length));
+    value.set_int(static_cast<int>(length));
+    return RC::SUCCESS;
+  }
+
+  if (function_type_ == ROUND_T) {
+    Value first_val, second_val;
+    first_obj_expr_->get_value(tuple, first_val);
+
+    if (first_val.attr_type() != FLOATS) {
+      LOG_WARN("round() can only be used on floats");
+      return RC::INVALID_ARGUMENT;
+    }
+
+    float f = first_val.get_float();
+    int   r = 0;
+    if (second_obj_expr_ != nullptr) {
+      second_obj_expr_->get_value(tuple, second_val);
+      r = second_val.get_int();
+    }
+    std::function<int(int)> pow10 = [&](int n) -> int {
+      if (n == 0) {
+        return 1;
+      }
+      if (n % 2 == 1) {
+        return 10 * pow10(n - 1);
+      }
+      int half = pow10(n / 2);
+      return half * half;
+    };
+    float pow = pow10(r);
+    f         = std::round(f * pow) / pow;
+    // val_.set_float(f);
+    value.set_float(f);
+    return RC::SUCCESS;
+  }
+
+  if (function_type_ == DATE_FORMAT_T) {
+    Value first_val, second_val;
+    if (first_obj_expr_ == nullptr || second_obj_expr_ == nullptr) {
+      LOG_WARN("date_format() should have two arguments");
+      return RC::INVALID_ARGUMENT;
+    }
+    first_obj_expr_->get_value(tuple, first_val);
+    second_obj_expr_->get_value(tuple, second_val);
+    // todo(ligch): 传入参数的合法性检查应该在创建expr之前进行？
+    date_u date;
+    if (first_val.attr_type() == CHARS) {
+      RC rc = str_to_date(first_val.get_string(), date);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    } else if (first_val.attr_type() == DATES) {
+      date = first_val.get_date();
+    } else {
+      LOG_WARN("date_format() can only be used on date");
+      return RC::INVALID_ARGUMENT;
+    }
+    std::string str_format = second_val.get_string();
+    std::string formatted_date;
+    if (!is_date_valid(date.year, date.month, date.day)) {
+      return RC::INVALID_ARGUMENT;
+    }
+    RC rc = format_to_date(date, str_format, formatted_date);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    value.set_string(formatted_date.c_str());
+    return RC::SUCCESS;
+  }
+
+  return RC::INVALID_ARGUMENT;
+}
+std::string FunctionExpr::name() const { return name(true); }
+std::string FunctionExpr::name(bool with_table) const
+{
+  if (alias_ != "") {
+    return alias_;
+  }
+  std::string ret = "";
+  switch (function_type_) {
+    case LENGTH_T: ret += "LENGTH"; break;
+    case DATE_FORMAT_T: ret += "DATE_FORMAT"; break;
+    case ROUND_T: ret += "ROUND"; break;
+    default: ret += "ERROR_FUNC"; break;
+  }
+  ret += "(";
+
+  if (with_table) {
+    if (first_obj_expr_->type() == ExprType::FIELD) {
+      ret += string(first_obj_expr_->table_name()) + ".";
+    }
+  }
+
+  if (first_obj_expr_->type() == ExprType::FIELD) {
+    ret += string(first_obj_expr_->field_name());
+  } else {
+    ret += string(first_obj_expr_->name());
+  }
+
+  if (second_obj_expr_ != nullptr) {
+    ret += ", " + second_obj_expr_->name();
+  }
+  ret += ")";
+  // std::transform(ret.begin(), ret.end(), ret.begin(), [](char const &c) { return std::toupper(c); });
+  return ret;
+}
+RC FunctionExpr::create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
+    std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+    shared_ptr<FunctionExpr> &func_expr)
+{
+  if (!attr_node.is_func) {
+    func_expr = nullptr;
+    return RC::INVALID_ARGUMENT;
+  }
+
+  FuncType    func_type       = attr_node.func_type;
+  const auto &first_func_arg  = attr_node.first_func_arg;
+  const auto &second_func_arg = attr_node.second_func_arg;
+  const auto &alias           = attr_node.alias;
+  if (second_func_arg.is_valid) {
+    if (second_func_arg.is_attr) {
+      // round(a, b), date_format(a, b), b can only be values.
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == LENGTH_T) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == DATE_FORMAT_T && second_func_arg.value.attr_type() != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == ROUND_T && second_func_arg.value.attr_type() != INTS) {
+      return RC::INVALID_ARGUMENT;
+    }
+  }
+  auto check_func_attr_type = [](FuncType func_type, AttrType attr_type) {
+    if (func_type == LENGTH_T && attr_type != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == DATE_FORMAT_T && attr_type != DATES &&
+        attr_type != CHARS) {  // todo: maybe chars can also be allowed
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == ROUND_T && attr_type != INTS && attr_type != FLOATS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    return RC::SUCCESS;
+  };
+  shared_ptr<Expression> obj_expr{nullptr};
+  if (first_func_arg.is_attr) {
+    const char      *table_name = first_func_arg.relation_name.c_str();
+    const char      *field_name = first_func_arg.attribute_name.c_str();
+    Table           *table      = nullptr;
+    const FieldMeta *field_meta = nullptr;
+    // if ()
+
+    if (!common::is_blank(table_name)) {
+      auto iter = tables->find(table_name);
+      if (iter == tables->end()) {
+        if (tables_alias->find(string(table_name)) == tables_alias->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        auto table_real_name = tables_alias->find(table_name)->second;
+        if (tables->find(table_real_name) == tables->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        iter = tables->find(table_real_name);
+      }
+      table      = iter->second;
+      field_meta = table->table_meta().field(field_name);
+    } else {
+      if (tables->size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      table      = default_table;
+      field_meta = table->table_meta().field(field_name);
+    }
+
+    field_meta = table->table_meta().field(field_name);
+    if (field_meta == nullptr) {
+      // todo(ligch): figure out whether the "*" can appear in function
+      if ((0 == strcmp(field_name, "*"))) {
+        field_meta = new FieldMeta("*");
+      } else {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+    RC rc = check_func_attr_type(func_type, field_meta->type());
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+
+    obj_expr = make_shared<FieldExpr>(table, field_meta);
+  } else {
+    RC rc = check_func_attr_type(func_type, first_func_arg.value.attr_type());
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    obj_expr = make_shared<ValueExpr>(first_func_arg.value);
+  }
+  shared_ptr<ValueExpr> second_obj_expr{nullptr};
+  if (second_func_arg.is_valid) {
+    second_obj_expr = make_shared<ValueExpr>(second_func_arg.value);
+    func_expr       = make_shared<FunctionExpr>(func_type, obj_expr, second_obj_expr, alias);
+  } else {
+    func_expr = make_shared<FunctionExpr>(func_type, obj_expr, alias);
+  }
+
   return RC::SUCCESS;
 }

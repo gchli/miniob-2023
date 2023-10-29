@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <stddef.h>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 #include <string>
 
@@ -38,10 +39,27 @@ enum AggrType
   FIELD_T,
 };
 
+enum FuncType
+{
+  UNDEFINED_T,
+  LENGTH_T,
+  ROUND_T,
+  DATE_FORMAT_T,
+};
+
 enum OrderType
 {
   ASC_T,
   DESC_T
+};
+
+struct FuncArgSqlNode
+{
+  bool        is_valid{false};
+  bool        is_attr{false};
+  std::string relation_name;   ///< relation name (may be NULL) 表名
+  std::string attribute_name;  ///< attribute name              属性名
+  Value       value;
 };
 
 /**
@@ -55,9 +73,16 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
-  bool        is_aggr;
-  AggrType    aggr_type;
-  bool        is_func;
+
+  bool     is_aggr{false};
+  AggrType aggr_type;
+
+  bool           is_func{false};
+  FuncType       func_type;
+  FuncArgSqlNode first_func_arg;
+  FuncArgSqlNode second_func_arg;
+
+  std::string alias;
 };
 
 /**
@@ -107,20 +132,23 @@ struct ConditionSqlNode
 {
   bool is_and = true;
   int unary_op = 0;
-  int left_is_attr;          ///< TRUE if left-hand side is an attribute
-                             ///< 1时，操作符左边是属性名，0时，是属性值
-  int   left_is_select = 0;  ///< 1时，操作符左边是select，0时，是属性值/属性名
-  Value left_value;          ///< left-hand side value if left_is_attr = FALSE
-  // Expression    *left_expression;
-  RelAttrSqlNode left_attr;  ///< left-hand side attribute
+
+  int            left_is_attr;
+  RelAttrSqlNode left_attr;
+  Value          left_value;
+
+  int            left_is_select = 0;
   SelectSqlNode *left_select;
-  CompOp         comp;                 ///< comparison operator
-  int            right_is_attr;        ///< TRUE if right-hand side is an attribute
-  int            right_is_select = 0;  ///< 1时，操作符右边是属性名，0时，是属性值
-  RelAttrSqlNode right_attr;           ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value          right_value;          ///< right-hand side value if right_is_attr = FALSE
-  // Expression    *right_expression;
-  SelectSqlNode     *right_select;
+
+  CompOp comp;  ///< comparison operator
+
+  int            right_is_attr;
+  RelAttrSqlNode right_attr;
+  Value          right_value;
+
+  int            right_is_select = 0;
+  SelectSqlNode *right_select;
+
   std::vector<Value> values;
 };
 
@@ -148,8 +176,10 @@ struct OrderBySqlNode
 
 struct SelectSqlNode
 {
-  std::vector<RelAttrSqlNode>   attributes;  ///< attributes in select clause
-  std::vector<std::string>      relations;   ///< 查询的表
+  std::vector<RelAttrSqlNode> attributes;  ///< attributes in select clause
+  // std::vector<std::string>                     relations;   ///< 查询的表
+  std::vector<std::pair<std::string, std::string>> relations;  ///< 查询的表
+  // std::unordered_map<std::string, std::string> relations_alias;
   std::vector<ConditionSqlNode> conditions;  ///< 查询条件，使用AND串联起来多个条件
   std::vector<InnerJoinSqlNode> joins;
   std::vector<OrderBySqlNode>   order_bys;
