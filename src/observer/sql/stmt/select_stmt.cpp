@@ -55,7 +55,7 @@ static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &f
   }
 }
 
-RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
+RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool find_ctx)
 {
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
@@ -81,6 +81,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
     tables.push_back(table);
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    FilterCtx::get_instance().table_names_.insert(std::pair<std::string, Table *>(table_name, table));
   }
   // collect tables in join statements
 
@@ -246,7 +247,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       &table_map,
       select_sql.conditions.data(),
       static_cast<int>(select_sql.conditions.size()),
-      filter_stmt);
+      filter_stmt,
+      find_ctx);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;
@@ -401,7 +403,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         &table_map,
         select_sql.havings.data(),
         static_cast<int>(select_sql.havings.size()),
-        having_stmt);
+        having_stmt,
+        find_ctx);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;

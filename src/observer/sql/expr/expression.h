@@ -18,9 +18,11 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 #include "sql/expr/tuple_cell.h"
+#include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
@@ -100,9 +102,21 @@ public:
   virtual const char *table_name() const { return ""; }
   virtual const char *field_name() const { return ""; }
   virtual const Field get_field() const { return {}; }
+  virtual std::unique_ptr<Expression> clone () const { return nullptr; }
 
 private:
   std::string name_;
+};
+
+class ExprContext
+{
+public:
+  std::unordered_map<std::string, shared_ptr<Tuple>> ctx_;
+  static ExprContext &get_context()
+  {
+    static ExprContext ctx;
+    return ctx;
+  }
 };
 
 /**
@@ -130,6 +144,10 @@ public:
   const char *field_name() const override { return field_.field_name(); }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+
+  std::unique_ptr<Expression> clone () const override {
+    return std::make_unique<FieldExpr>(field_);
+  }
 
 private:
   Field field_;
@@ -162,6 +180,10 @@ public:
 
   const Value &get_value() const { return value_; }
 
+  std::unique_ptr<Expression> clone () const override {
+    return std::make_unique<ValueExpr>(value_);
+  }
+
 private:
   Value value_;
 };
@@ -187,9 +209,39 @@ public:
 
   const std::vector<Value> values() const { return values_; }
 
+  std::unique_ptr<Expression> clone () const override {
+    return std::make_unique<ValuesExpr>(values_);
+  }
+
 private:
   std::vector<Value> values_;
   Value              value_{};
+};
+
+class SelectExpr : public Expression
+{
+public:
+  SelectExpr() = delete;
+  explicit SelectExpr(const shared_ptr<Stmt> &select_stmt) : select_stmt_(select_stmt) {};
+
+  virtual ~SelectExpr() = default;
+
+  ExprType type() const override { return ExprType::SELECT; }
+
+  AttrType value_type() const override { return UNDEFINED; }
+
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; }; 
+
+  shared_ptr<Stmt> select_stmt() const { return select_stmt_; }
+
+  std::unique_ptr<Expression> clone () const override {
+    return std::make_unique<SelectExpr>(select_stmt_);
+  }
+
+  // RC get_value(const Tuple &)
+private:
+  shared_ptr<Stmt> select_stmt_;
+  // unique_ptr<LogicalOperator> select_logical_oper_;
 };
 
 /**

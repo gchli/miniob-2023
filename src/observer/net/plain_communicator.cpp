@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/io/io.h"
 #include "common/log/log.h"
 #include "sql/parser/value.h"
+#include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include <cstddef>
 

@@ -207,6 +207,8 @@ public:
 
   const Record &record() const { return *record_; }
 
+  const Table *table() const { return table_; }
+
 private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;

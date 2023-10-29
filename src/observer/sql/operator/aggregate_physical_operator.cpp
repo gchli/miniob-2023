@@ -314,7 +314,7 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
     auto  left_filer_obj  = filter_unit->left();
     auto  right_filer_obj = filter_unit->right();
     Value left_value, right_value;
-    if (left_filer_obj.is_expr) {
+    if (left_filer_obj.is_expr()) {
       const auto &expr = left_filer_obj.expression;
       if (expr->type() == ExprType::AGGREGATE) {
         auto          aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
@@ -323,7 +323,7 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
       } else {
         LOG_WARN("shouldn't have other expr type in filter obj now");
       }
-    } else if (left_filer_obj.is_attr) {
+    } else if (left_filer_obj.is_attr()) {
       // if (left_filer_obj.)
       TupleCellSpec left_spec(left_filer_obj.field.table_name(), left_filer_obj.field.field_name());
       tuple.find_cell(left_spec, left_value);
@@ -331,7 +331,7 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
       left_value = left_filer_obj.value;
     }
 
-    if (right_filer_obj.is_expr) {
+    if (right_filer_obj.is_expr()) {
       const auto &expr = right_filer_obj.expression;
       if (expr->type() == ExprType::AGGREGATE) {
         auto aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
@@ -343,7 +343,7 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
       } else {
         LOG_WARN("shouldn't have other expr type in filter obj now");
       }
-    } else if (right_filer_obj.is_attr) {
+    } else if (right_filer_obj.is_attr()) {
       TupleCellSpec right_spec(right_filer_obj.field.table_name(), right_filer_obj.field.field_name());
       tuple.find_cell(right_spec, right_value);
     } else {

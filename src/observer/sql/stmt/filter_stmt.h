@@ -14,8 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <memory>
+#include <stack>
+#include <unordered_set>
 #include <vector>
 #include <unordered_map>
+#include "sql/expr/tuple.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/value.h"
 #include "sql/stmt/stmt.h"
@@ -29,36 +33,66 @@ class SelectStmt;
 
 struct FilterObj
 {
-  bool                   is_attr{false};
-  bool                   is_value{false};
-  bool                   is_expr{false};
-  bool                   is_values{false};
+  enum class FilterObjType
+  {
+    FILTER_OBJ_ATTR,
+    FILTER_OBJ_VALUE,
+    FILTER_OBJ_EXPR,
+    FILTER_OBJ_VALUES,
+    FILTER_OBJ_SELECT,
+    FILTER_OBJ_FATHRE_ATTR,
+  };
+  FilterObjType          type;
+  bool is_attr() const { return type == FilterObjType::FILTER_OBJ_ATTR; }
+  bool is_value() const { return type == FilterObjType::FILTER_OBJ_VALUE; }
+  bool is_expr() const { return type == FilterObjType::FILTER_OBJ_EXPR; }
+  bool is_values() const { return type == FilterObjType::FILTER_OBJ_VALUES; }
+  bool is_select() const { return type == FilterObjType::FILTER_OBJ_SELECT; }
   Field                  field;
   Value                  value;
   shared_ptr<Expression> expression;  // maybe normal function or aggregate function  std::vector<Value> values_;
   std::vector<Value>     values_;
+  shared_ptr<Stmt>       select_stmt_;
   void                   init_attr(const Field &field)
   {
-    is_attr     = true;
+    type        = FilterObjType::FILTER_OBJ_ATTR;
     this->field = field;
   }
 
   void init_value(const Value &value)
   {
-    is_value    = true;
+    type        = FilterObjType::FILTER_OBJ_VALUE;
     this->value = value;
   }
 
   void init_expr(const shared_ptr<Expression> &&expr)
   {
-    is_expr          = true;
+    type             = FilterObjType::FILTER_OBJ_EXPR;
     this->expression = expr;
   }
 
   void init_values(std::vector<Value> &&values)
   {
-    is_values = true;
-    values_   = std::move(values);
+    type    = FilterObjType::FILTER_OBJ_VALUES;
+    values_ = std::move(values);
+  }
+
+  void init_values(const std::vector<Value> &values)
+  {
+    type    = FilterObjType::FILTER_OBJ_VALUES;
+    values_ = values;
+  }
+
+  void init_select_stmt(const shared_ptr<Stmt> &&select_stmt)
+  {
+    type         = FilterObjType::FILTER_OBJ_SELECT;
+    select_stmt_ = select_stmt;
+  }
+
+  void init_father_attr(const Field &field)
+  {
+    type        = FilterObjType::FILTER_OBJ_FATHRE_ATTR;
+    this->field = field;
   }
 };
 
@@ -69,8 +103,10 @@ public:
   ~FilterUnit() {}
 
   void set_comp(CompOp comp) { comp_ = comp; }
+  void set_is_and(bool is_and) { is_and_=is_and; }
 
   CompOp comp() const { return comp_; }
+  bool is_and() const { return is_and_; }
 
   void set_left(const FilterObj &obj) { left_ = obj; }
   void set_right(const FilterObj &obj) { right_ = obj; }
@@ -79,9 +115,26 @@ public:
   const FilterObj &right() const { return right_; }
 
 private:
+  bool is_and_ = true; // 用来做不同FilterUnit之间的连接
   CompOp    comp_ = NO_OP;
   FilterObj left_;
   FilterObj right_;
+};
+
+class FilterCtx {
+public:
+  std::unordered_map<std::string, Table *> table_names_;
+  std::unordered_map<std::string, Tuple *> tuple_maps_;
+  bool contain_sub_select = false;
+  static FilterCtx &get_instance() {
+    static FilterCtx ctx;
+    return ctx;
+  }
+  void reset() {
+    table_names_.clear();
+    tuple_maps_.clear();
+    contain_sub_select = false;
+  }
 };
 
 /**
@@ -99,10 +152,10 @@ public:
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt);
+      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx=false);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode &condition, FilterUnit *&filter_unit);
+      const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx=false);
 
 private:
   static bool               check_comparable(FilterUnit &filter_unit);

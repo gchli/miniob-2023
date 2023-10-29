@@ -74,7 +74,9 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(VARIABLE_NOT_EXISTS)         \
   DEFINE_RC(VARIABLE_NOT_VALID)          \
   DEFINE_RC(LOGBUF_FULL)                 \
-  DEFINE_RC(NOT_IMPLEMENTED)             
+  DEFINE_RC(NOT_IMPLEMENTED)             \
+  DEFINE_RC(NEED_SUB_SELECT)             \
+  DEFINE_RC(NEED_APPLY)
 
 enum class RC
 {

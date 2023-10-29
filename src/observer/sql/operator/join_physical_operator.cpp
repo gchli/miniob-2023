@@ -106,13 +106,13 @@ bool NestedLoopJoinPhysicalOperator::is_tuple_valid(const shared_ptr<FilterStmt>
     auto  left_filer_obj  = filter_unit->left();
     auto  right_filer_obj = filter_unit->right();
     Value left_value, right_value;
-    if (left_filer_obj.is_attr) {
+    if (left_filer_obj.is_attr()) {
       TupleCellSpec left_spec(left_filer_obj.field.table_name(), left_filer_obj.field.field_name());
       joined_tuple_.find_cell(left_spec, left_value);
     } else {
       left_value = left_filer_obj.value;
     }
-    if (right_filer_obj.is_attr) {
+    if (right_filer_obj.is_attr()) {
       TupleCellSpec right_spec(right_filer_obj.field.table_name(), right_filer_obj.field.field_name());
       joined_tuple_.find_cell(right_spec, right_value);
     } else {

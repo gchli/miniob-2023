@@ -1019,6 +1019,12 @@ condition_list:
       $$->emplace_back(*$1);
       delete $1;
     }
+    | condition OR condition_list {
+      $$ = $3;
+      $1->is_and = false;
+      $$->emplace_back(*$1);
+      delete $1;     
+    }
     ;
 
 condition:
