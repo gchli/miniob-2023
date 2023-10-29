@@ -81,6 +81,9 @@ RC format_to_date(const date_u &date, const string &date_format, string &date_st
       if (next_char == 'Y') {
         ss << year;
       } else if (next_char == 'y') {
+        if (year % 100 < 10) {
+          ss << "0";
+        }
         ss << year % 100;
       } else if (next_char == 'M') {
         ss << month_string[month - 1];
