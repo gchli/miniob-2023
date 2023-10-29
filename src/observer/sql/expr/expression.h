@@ -51,6 +51,7 @@ enum class ExprType
   AGGREGATE,    ///< 聚合函数
   FUNCTION,     ///< 函数
   SELECT,       ///< 子查询
+  VALUES        ///< 多个值
 };
 
 /**
@@ -199,7 +200,7 @@ public:
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; };
   RC try_get_value(Value &value) const override { return RC::INVALID_ARGUMENT; }
 
-  ExprType type() const override { return ExprType::VALUE; }
+  ExprType type() const override { return ExprType::VALUES; }
 
   AttrType value_type() const override { return values_[0].attr_type(); }
 

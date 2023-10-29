@@ -254,7 +254,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         filter_obj.init_values(std::move(values));
       }
     }
-    delete condition.left_select;
     filter_unit->set_left(filter_obj);
   } else if (condition.left_is_attr) {
     Table           *table = nullptr;
@@ -326,15 +325,12 @@ right:
     } else {
       // select * from x where id in (1,2,3)
       if (condition.values.size() == 1) {
-        FilterObj filter_obj;
         filter_obj.init_value(condition.values[0]);
       } else {
-        FilterObj filter_obj;
         filter_obj.init_values(condition.values);
       }
     }
     filter_unit->set_right(filter_obj);
-    delete condition.right_select;
   } else if (condition.right_is_attr) {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;

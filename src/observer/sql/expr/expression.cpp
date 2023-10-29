@@ -204,7 +204,8 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     return RC::SUCCESS;
   }
 
-  if (dynamic_cast<ValuesExpr*>(left_.get()) != nullptr && dynamic_cast<ValuesExpr*>(right_.get()) != nullptr) {
+  if (left_->type() == ExprType::VALUES || right_->type() == ExprType::VALUES) {
+  // if (dynamic_cast<ValuesExpr*>(left_.get()) != nullptr && dynamic_cast<ValuesExpr*>(right_.get()) != nullptr) {
     return RC::INVALID_ARGUMENT;
   }
 
