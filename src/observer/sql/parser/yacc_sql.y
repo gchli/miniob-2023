@@ -145,7 +145,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::vector<Value>> * insert_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
+  // std::vector<std::string> *        relation_list;
+  std::vector<std::pair<std::string, std::string>> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
   UpdateListSqlNode *               update_pair;
@@ -764,8 +765,9 @@ select_stmt:        /*  select 语句的语法解析树*/
     }
     ;
 
+
 select_body:
-    SELECT select_attr FROM ID rel_list inner_join_list where group_by having order_by
+    SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by
     {
       $$ = new SelectSqlNode;
       if ($2 != nullptr) {
@@ -774,42 +776,42 @@ select_body:
       }
 
       // relation list
-      if ($5 != nullptr) {
-        $$->relations.swap(*$5);
-        delete $5;
+      if ($6 != nullptr) {
+        $$->relations.swap(*$6);
+        delete $6;
       }
-      $$->relations.push_back($4);
+      $$->relations.push_back({$4, $5});
       std::reverse($$->relations.begin(), $$->relations.end());
 
       // inner join
-      if ($6 != nullptr) {
-        $$->joins.swap(*$6);
+      if ($7 != nullptr) {
+        $$->joins.swap(*$7);
         std::reverse($$->joins.begin(), $$->joins.end());
-        delete $6;
+        delete $7;
       }
 
       // where conditions
-      if ($7 != nullptr) {
-        $$->conditions.swap(*$7);
-        delete$7;
+      if ($8 != nullptr) {
+        $$->conditions.swap(*$8);
+        delete$8;
       }
 
       // group by
-      if ($8 != nullptr) {
-        $$->group_bys.swap(*$8);
-        delete $8;
-      }
-
-      // having
       if ($9 != nullptr) {
-        $$->havings.swap(*$9);
+        $$->group_bys.swap(*$9);
         delete $9;
       }
 
-      // order by
+      // having
       if ($10 != nullptr) {
-        $$->order_bys.swap(*$10);
+        $$->havings.swap(*$10);
         delete $10;
+      }
+
+      // order by
+      if ($11 != nullptr) {
+        $$->order_bys.swap(*$11);
+        delete $11;
       }
       std::reverse($$->order_bys.begin(), $$->order_bys.end());
       free($4);
@@ -993,15 +995,16 @@ rel_list:
     {
       $$ = nullptr;
     }
-    | COMMA ID rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
+    | COMMA ID alias_optional rel_list {
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::vector<std::pair<std::string, std::string>>;
       }
 
-      $$->push_back($2);
+      $$->push_back({$2, $3});
       free($2);
+      free($3);
     }
     ;
 

@@ -131,10 +131,16 @@ public:
 
   const char *field_name() const override { return field_.field_name(); }
 
-  RC get_value(const Tuple &tuple, Value &value) const override;
+  RC                get_value(const Tuple &tuple, Value &value) const override;
+  const std::string get_field_alias() const { return field_alias_; }
+  void              set_field_alias(const std::string &alias) { field_alias_ = alias; }
+  const std::string get_table_alias() const { return table_alias_; }
+  void              set_table_alias(const std::string &alias) { table_alias_ = alias; }
 
 private:
-  Field field_;
+  Field       field_;
+  std::string field_alias_{""};
+  std::string table_alias_{""};
 };
 
 /**
@@ -402,7 +408,8 @@ public:
       const std::shared_ptr<Expression> &second_obj_expr, std::string alias = "");
   virtual ~FunctionExpr() = default;  // todo(ligch)
   static RC   create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
-        std::unordered_map<std::string, Table *> *tables, shared_ptr<FunctionExpr> &func_expr);
+        std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+        shared_ptr<FunctionExpr> &func_expr);
   ExprType    type() const override { return ExprType::FUNCTION; }
   std::string name() const override;
   std::string name(bool with_table) const;

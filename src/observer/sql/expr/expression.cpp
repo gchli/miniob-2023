@@ -586,7 +586,8 @@ std::string FunctionExpr::name(bool with_table) const
   return ret;
 }
 RC FunctionExpr::create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
-    std::unordered_map<std::string, Table *> *tables, shared_ptr<FunctionExpr> &func_expr)
+    std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+    shared_ptr<FunctionExpr> &func_expr)
 {
   if (!attr_node.is_func) {
     func_expr = nullptr;
@@ -636,8 +637,16 @@ RC FunctionExpr::create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table
     if (!common::is_blank(table_name)) {
       auto iter = tables->find(table_name);
       if (iter == tables->end()) {
-        LOG_WARN("no such table in from list: %s", table_name);
-        return RC::SCHEMA_FIELD_MISSING;
+        if (tables_alias->find(string(table_name)) == tables_alias->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        auto table_real_name = tables_alias->find(table_name)->second;
+        if (tables->find(table_real_name) == tables->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        iter = tables->find(table_real_name);
       }
       table      = iter->second;
       field_meta = table->table_meta().field(field_name);

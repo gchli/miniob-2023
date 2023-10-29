@@ -151,7 +151,8 @@ union YYSTYPE
   std::vector<std::vector<Value>> * insert_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
+  // std::vector<std::string> *        relation_list;
+  std::vector<std::pair<std::string, std::string>> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
   UpdateListSqlNode *               update_pair;
@@ -165,7 +166,7 @@ union YYSTYPE
   float                             floats;
   bool                              is_null;
 
-#line 169 "yacc_sql.hpp"
+#line 170 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
