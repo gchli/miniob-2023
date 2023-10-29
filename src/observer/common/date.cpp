@@ -81,7 +81,37 @@ RC format_to_date(const date_u &date, const string &date_format, string &date_st
                  "October",
                  "November",
                  "December"};
-  std::string       day_postfix[10]  = {"st", "nd", "rd", "th", "th", "th", "th", "th", "th", "th"};
+  std::string       day_postfix[31]  = {"st",
+             "nd",
+             "rd",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",  // 1-10
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",  // 11-20
+             "st",
+             "nd",
+             "rd",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",
+             "th",  // 21-30
+             "st"};
 
   for (size_t i = 0; i < date_format.size();) {
     if (date_format[i] == '%') {
@@ -104,7 +134,7 @@ RC format_to_date(const date_u &date, const string &date_format, string &date_st
         }
         ss << month;
       } else if (next_char == 'D') {
-        ss << day << day_postfix[day % 10 - 1];
+        ss << day << day_postfix[day - 1];
       } else if (next_char == 'd') {
         if (day < 10) {
           ss << "0";

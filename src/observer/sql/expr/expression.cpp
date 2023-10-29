@@ -541,7 +541,10 @@ RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
     }
     std::string str_format = second_val.get_string();
     std::string formatted_date;
-    RC          rc = format_to_date(date, str_format, formatted_date);
+    if (!is_date_valid(date.year, date.month, date.day)) {
+      return RC::INVALID_ARGUMENT;
+    }
+    RC rc = format_to_date(date, str_format, formatted_date);
     if (rc != RC::SUCCESS) {
       return rc;
     }
