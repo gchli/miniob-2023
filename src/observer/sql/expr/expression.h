@@ -102,10 +102,10 @@ public:
   virtual std::string name() const { return name_; }
   virtual void        set_name(std::string name) { name_ = name; }
 
-  virtual const char *table_name() const { return ""; }
-  virtual const char *field_name() const { return ""; }
-  virtual const Field get_field() const { return {}; }
-  virtual std::unique_ptr<Expression> clone () const { return nullptr; }
+  virtual const char                 *table_name() const { return ""; }
+  virtual const char                 *field_name() const { return ""; }
+  virtual const Field                 get_field() const { return {}; }
+  virtual std::unique_ptr<Expression> clone() const { return nullptr; }
 
 private:
   std::string name_;
@@ -115,7 +115,7 @@ class ExprContext
 {
 public:
   std::unordered_map<std::string, shared_ptr<Tuple>> ctx_;
-  static ExprContext &get_context()
+  static ExprContext                                &get_context()
   {
     static ExprContext ctx;
     return ctx;
@@ -132,7 +132,16 @@ public:
   FieldExpr() = default;
   FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field) {}
   FieldExpr(const Field &field) : field_(field) {}
-
+  FieldExpr(const string &attr_name) : is_uncompleted_(true), tmp_attribute_name_(attr_name) {}
+  FieldExpr(const string &relation_name, const string &attr_name)
+      : is_uncompleted_(true), tmp_relation_name_(relation_name), tmp_attribute_name_(attr_name)
+  {}
+  FieldExpr(const RelAttrSqlNode &attr_node)
+      : is_uncompleted_(true),
+        tmp_relation_name_(attr_node.relation_name),
+        tmp_attribute_name_(attr_node.attribute_name),
+        field_alias_(attr_node.alias)
+  {}
   virtual ~FieldExpr() = default;
 
   ExprType type() const override { return ExprType::FIELD; }
@@ -146,20 +155,22 @@ public:
 
   const char *field_name() const override { return field_.field_name(); }
 
-  RC                get_value(const Tuple &tuple, Value &value) const override;
-  const std::string get_field_alias() const { return field_alias_; }
-  void              set_field_alias(const std::string &alias) { field_alias_ = alias; }
-  const std::string get_table_alias() const { return table_alias_; }
-  void              set_table_alias(const std::string &alias) { table_alias_ = alias; }
-
-  std::unique_ptr<Expression> clone () const override {
-    return std::make_unique<FieldExpr>(field_);
-  }
+  RC                 get_value(const Tuple &tuple, Value &value) const override;
+  const std::string  get_field_alias() const { return field_alias_; }
+  void               set_field_alias(const std::string &alias) { field_alias_ = alias; }
+  const std::string  get_table_alias() const { return table_alias_; }
+  void               set_table_alias(const std::string &alias) { table_alias_ = alias; }
+  const std::string &get_tmp_relation_name() const { return tmp_relation_name_; }
+  const std::string &get_tmp_attribute_name() const { return tmp_attribute_name_; }
 
 private:
   Field       field_;
   std::string field_alias_{""};
   std::string table_alias_{""};
+  // when create arithmetic expressions, the parser can't get the table's pointer.
+  bool        is_uncompleted_{false};
+  std::string tmp_attribute_name_{""};
+  std::string tmp_relation_name_{""};
 };
 
 /**
@@ -191,10 +202,8 @@ public:
 
   const Value &get_value() const { return value_; }
 
-  std::unique_ptr<Expression> clone () const override {
-    return std::make_unique<ValueExpr>(value_);
-  }
-  std::string name() const override { return value_.to_string(); }
+  std::unique_ptr<Expression> clone() const override { return std::make_unique<ValueExpr>(value_); }
+  std::string                 name() const override { return value_.to_string(); }
 
 private:
   Value value_;
@@ -221,9 +230,7 @@ public:
 
   const std::vector<Value> values() const { return values_; }
 
-  std::unique_ptr<Expression> clone () const override {
-    return std::make_unique<ValuesExpr>(values_);
-  }
+  std::unique_ptr<Expression> clone() const override { return std::make_unique<ValuesExpr>(values_); }
 
 private:
   std::vector<Value> values_;
@@ -234,7 +241,7 @@ class SelectExpr : public Expression
 {
 public:
   SelectExpr() = delete;
-  explicit SelectExpr(const shared_ptr<Stmt> &select_stmt) : select_stmt_(select_stmt) {};
+  explicit SelectExpr(const shared_ptr<Stmt> &select_stmt) : select_stmt_(select_stmt){};
 
   virtual ~SelectExpr() = default;
 
@@ -242,13 +249,11 @@ public:
 
   AttrType value_type() const override { return UNDEFINED; }
 
-  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; }; 
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INVALID_ARGUMENT; };
 
   shared_ptr<Stmt> select_stmt() const { return select_stmt_; }
 
-  std::unique_ptr<Expression> clone () const override {
-    return std::make_unique<SelectExpr>(select_stmt_);
-  }
+  std::unique_ptr<Expression> clone() const override { return std::make_unique<SelectExpr>(select_stmt_); }
 
   // RC get_value(const Tuple &)
 private:

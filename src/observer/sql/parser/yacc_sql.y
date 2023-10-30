@@ -136,6 +136,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   enum OrderType                    order_t;
   RelAttrSqlNode *                  aggr_func;
   RelAttrSqlNode *                  normal_func;
+  RelAttrSqlNode *                  expr_attr;
   RelAttrSqlNode *                  rel_attr;
   std::vector<AttrInfoSqlNode> *    attr_infos;
   AttrInfoSqlNode *                 attr_info;
@@ -145,7 +146,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::vector<Value>> * insert_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  // std::vector<std::string> *        relation_list;
   std::vector<std::pair<std::string, std::string>> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
@@ -174,6 +174,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <aggr_func>           aggr_func
 %type <func_t>              func_type
 %type <normal_func>         normal_func
+%type <expr_attr>           expr_attr
 %type <string>              alias_optional;
 %type <condition>           condition
 %type <value>               value
@@ -185,6 +186,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_list>       order_by_list
 /* %type <join_op>             join_op */
 %type <rel_attr>            rel_attr
+/* %type <rel_attr>            rel_attr_with_alias */
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
@@ -491,6 +493,14 @@ func_type:
     | DATE_FORMAT { $$=DATE_FORMAT_T; }
     | ROUND { $$=ROUND_T; }
     ;
+
+expr_attr:
+    expression alias_optional {
+      $$ = new RelAttrSqlNode;
+      $$->is_expr = true;
+      $$->expr = $1;
+      $$->alias = $2;
+    }
 
 normal_func:
     func_type LBRACE rel_attr RBRACE alias_optional
@@ -799,7 +809,7 @@ select_body:
       // where conditions
       if ($8 != nullptr) {
         $$->conditions.swap(*$8);
-        delete$8;
+        delete $8;
       }
 
       // group by
@@ -887,19 +897,24 @@ expression:
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
-    ;
+    | rel_attr {
+        $$ = new FieldExpr(*$1);
+        $$->set_name(token_name(sql_string, &@$));
+        delete $1;
+    };
+
 
 select_attr:
     '*' {
       $$ = new std::vector<RelAttrSqlNode>;
       RelAttrSqlNode attr;
-      attr.is_aggr = false;
-      attr.is_func = false;
       attr.relation_name  = "";
       attr.attribute_name = "*";
+      attr.expr = new FieldExpr("*");
+      attr.is_expr = true;
       $$->emplace_back(attr);
     }
-    | rel_attr attr_list {
+    /* | rel_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
       } else {
@@ -907,7 +922,7 @@ select_attr:
       }
       $$->emplace_back(*$1);
       delete $1;
-    }
+    } */
     | aggr_func attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -918,6 +933,15 @@ select_attr:
       delete $1;
       }
     | normal_func attr_list {
+      if ($2 != nullptr) {
+        $$ = $2;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | expr_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
       } else {
@@ -944,8 +968,8 @@ alias_optional:
     ;
 
 
-rel_attr:
-    ID alias_optional {
+/* rel_attr_with_alias:
+    rel_attr ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->attribute_name = $1;
@@ -953,7 +977,26 @@ rel_attr:
       free($1);
       free($2);
     }
-    | ID DOT ID alias_optional {
+    | rel_attr AS ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
+    }; */
+
+
+rel_attr:
+    ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->relation_name  = $1;
@@ -972,12 +1015,14 @@ rel_attr:
     }
     ;
 
+
+
 attr_list:
     /* empty */
     {
       $$ = nullptr;
     }
-    | COMMA rel_attr attr_list {
+    /* | COMMA rel_attr attr_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
@@ -986,7 +1031,7 @@ attr_list:
 
       $$->emplace_back(*$2);
       delete $2;
-    }
+    } */
     | COMMA aggr_func attr_list {
       if ($3 != nullptr) {
         $$ = $3;
@@ -998,6 +1043,15 @@ attr_list:
       delete $2;
     }
     | COMMA normal_func attr_list {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<RelAttrSqlNode>;
+      }
+      $$->emplace_back(*$2);
+      delete $2;
+    }
+    | COMMA expr_attr attr_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
@@ -1102,7 +1156,7 @@ group_by:
     {
       $$ = nullptr;
     }
-    | GROUP BY rel_attr attr_list {
+    | GROUP BY expr_attr attr_list {
       if ($4 != nullptr) {
         $$ = $4;
       } else {
@@ -1199,36 +1253,12 @@ condition_list:
       $$ = $3;
       $1->is_and = false;
       $$->emplace_back(*$1);
-      delete $1;     
+      delete $1;
     }
     ;
 
 condition:
-    rel_attr comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | value comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | rel_attr comp_op rel_attr
+    normal_func comp_op expr_attr
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -1240,61 +1270,13 @@ condition:
       delete $1;
       delete $3;
     }
-    | value comp_op rel_attr
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | normal_func comp_op rel_attr
+    | expr_attr comp_op normal_func
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
       $$->left_attr = *$1;
       $$->right_is_attr = 1;
       $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | rel_attr comp_op normal_func
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | value comp_op normal_func
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | normal_func comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
       $$->comp = $2;
 
       delete $1;
@@ -1312,11 +1294,11 @@ condition:
       delete $1;
       delete $3;
     }
-    | value comp_op aggr_func // value should be replaced by expression
+    | expr_attr comp_op aggr_func // value should be replaced by expression
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
       $$->right_is_attr = 1;
       $$->right_attr = *$3;
       $$->comp = $2;
@@ -1324,29 +1306,44 @@ condition:
       delete $1;
       delete $3;
     }
-    | aggr_func comp_op value
+    | aggr_func comp_op expr_attr
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
       $$->left_attr = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
       $$->comp = $2;
 
       delete $1;
       delete $3;
     }
-    | value comp_op LBRACE select_body RBRACE
+    |
+    expr_attr comp_op expr_attr {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | expr_attr comp_op LBRACE select_body RBRACE
+    /* | value comp_op LBRACE select_body RBRACE */
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
+      // $$->left_is_attr = 0;
+      // $$->left_value = *$1;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
       $$->right_is_select = 1;
       $$->right_select = $4;
       $$->comp = $2;
       delete $1;
     }
-    | rel_attr comp_op LBRACE select_body RBRACE
+    /* | rel_attr comp_op LBRACE select_body RBRACE
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -1355,8 +1352,8 @@ condition:
       $$->right_select = $4;
       $$->comp = $2;
       delete $1;
-    }
-    | LBRACE select_body RBRACE comp_op rel_attr
+    } */
+    | LBRACE select_body RBRACE comp_op expr_attr
     {
       $$ = new ConditionSqlNode;
       $$->left_is_select = 1;
@@ -1366,7 +1363,7 @@ condition:
       $$->comp = $4;
       delete $5;
     }
-    | LBRACE select_body RBRACE comp_op value
+    /* | LBRACE select_body RBRACE comp_op value
     {
       $$ = new ConditionSqlNode;
       $$->left_is_select = 1;
@@ -1375,7 +1372,7 @@ condition:
       $$->right_value = *$5;
       $$->comp = $4;
       delete $5;
-    }
+    } */
     | LBRACE select_body RBRACE comp_op LBRACE select_body RBRACE
     {
       $$ = new ConditionSqlNode;
@@ -1394,7 +1391,7 @@ condition:
       $$->comp = $1;
       $$->unary_op = 1;
     }
-    | rel_attr comp_op LBRACE value value_list RBRACE
+    | expr_attr comp_op LBRACE value value_list RBRACE
     {
       // HERE
       $$ = new ConditionSqlNode;

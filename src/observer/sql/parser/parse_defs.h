@@ -82,7 +82,9 @@ struct RelAttrSqlNode
   FuncArgSqlNode first_func_arg;
   FuncArgSqlNode second_func_arg;
 
-  std::string alias;
+  bool        is_expr{false};
+  Expression *expr{nullptr};
+  std::string alias{""};
 };
 
 /**
@@ -108,9 +110,7 @@ enum CompOp
   NO_OP
 };
 
-inline bool is_values_op(CompOp op) {
-  return op == IN || op == IN_NOT || op == EXIST || op == EXIST_NOT;
-}
+inline bool is_values_op(CompOp op) { return op == IN || op == IN_NOT || op == EXIST || op == EXIST_NOT; }
 
 enum CondOp
 {
@@ -130,8 +130,8 @@ struct SelectSqlNode;
 
 struct ConditionSqlNode
 {
-  bool is_and = true;
-  int unary_op = 0;
+  bool is_and   = true;
+  int  unary_op = 0;
 
   int            left_is_attr;
   RelAttrSqlNode left_attr;

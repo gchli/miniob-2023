@@ -49,7 +49,8 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   }
 }
 
-static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &field_metas, string table_alias, std::vector<std::string> &field_alias)
+static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &field_metas, string table_alias,
+    std::vector<std::string> &field_alias)
 {
   const TableMeta &table_meta = table->table_meta();
   const int        field_num  = table_meta.field_num();
@@ -151,7 +152,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
 
   // collect query expressions
   std::vector<shared_ptr<Expression>> query_exprs;
-  std::vector<std::string> field_alias;
+  std::vector<std::string>            field_alias;
 
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
@@ -188,7 +189,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         }
         field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
-      } else if(0 == strcmp(field_name, "*") && relation_attr.aggr_type == COUNT_T){
+      } else if (0 == strcmp(field_name, "*") && relation_attr.aggr_type == COUNT_T) {
         // select count(*)
 
         Table           *table      = new Table();
@@ -230,76 +231,85 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
       }
       continue;
     }
-
-    // create field expressions
-    if (common::is_blank(relation_attr.relation_name.c_str()) &&
-        0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
-      // select *
-      for (Table *table : tables) {
-        wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
-      }
-
-    } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
-      const char *table_name = relation_attr.relation_name.c_str();
-      const char *field_name = relation_attr.attribute_name.c_str();
-      const char *alias_name = relation_attr.alias.c_str();
-
-      if (0 == strcmp(table_name, "*")) {
-        // select *.col
-        if (0 != strcmp(field_name, "*")) {
-          LOG_WARN("invalid field name while table is *. attr=%s", field_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-        for (Table *table : tables) {
-          wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
-        }
-      } else {
-        // select table1.col1
-        auto iter = table_map.find(table_name);
-        if (iter == table_map.end()) {
-          if (table_alias.find(string(table_name)) == table_alias.end()) {
-            LOG_WARN("no such table in from list: %s", table_name);
-            return RC::SCHEMA_FIELD_MISSING;
+    if (relation_attr.is_expr) {
+      auto expr = relation_attr.expr;
+      // create field expressions
+      if (expr->type() == ExprType::FIELD) {
+        auto field_expr     = dynamic_cast<FieldExpr *>(expr);
+        auto rel_alias      = relation_attr.alias;
+        auto relation_name  = field_expr->get_tmp_relation_name();
+        auto attribute_name = field_expr->get_tmp_attribute_name();
+        if (common::is_blank(relation_name.c_str()) && 0 == strcmp(attribute_name.c_str(), "*")) {
+          for (Table *table : tables) {
+            wildcard_fields(table, query_exprs, "");  // todo: fix alias
           }
-          auto table_real_name = table_alias[table_name];
-          if (table_map.find(table_real_name) == table_map.end()) {
-            LOG_WARN("no such table in from list: %s", table_name);
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-          iter = table_map.find(table_real_name);
-        }
+        } else if (!common::is_blank(relation_name.c_str())) {
+          if (0 == strcmp(relation_name.c_str(), "*")) {
+            if (0 != strcmp(attribute_name.c_str(), "*")) {
+              LOG_WARN("invalid field name while table is *. attr=%s", relation_name.c_str());
+              return RC::SCHEMA_FIELD_MISSING;
+            }
+            for (Table *table : tables) {
+              wildcard_fields(table, query_exprs, "");  // todo: fix alias
+            }
+          } else {
+            auto iter = table_map.find(relation_name);
+            if (iter == table_map.end()) {
+              if (table_alias.find(relation_name) == table_alias.end()) {
+                LOG_WARN("no such table in from list: %s", relation_name.c_str());
+                return RC::SCHEMA_FIELD_MISSING;
+              }
+              auto table_real_name = table_alias[relation_name];
+              if (table_map.find(table_real_name) == table_map.end()) {
+                LOG_WARN("no such table in from list: %s", relation_name.c_str());
+                return RC::SCHEMA_FIELD_MISSING;
+              }
+              iter = table_map.find(table_real_name);
+            }
 
-        Table *table = iter->second;
-        if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_exprs, table_name, field_alias);
+            Table *table = iter->second;
+            if (0 == strcmp(attribute_name.c_str(), "*")) {
+              wildcard_fields(table, query_exprs, relation_name.c_str(), field_alias);
+            } else {
+              const FieldMeta *field_meta = table->table_meta().field(attribute_name.c_str());
+              if (nullptr == field_meta) {
+                LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), attribute_name.c_str());
+                return RC::SCHEMA_FIELD_MISSING;
+              }
+              auto field_expr = make_shared<FieldExpr>(table, field_meta);
+              field_expr->set_table_alias(relation_name.c_str());
+              field_alias.emplace_back(relation_attr.alias);
+              query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
+            }
+          }
         } else {
-          const FieldMeta *field_meta = table->table_meta().field(field_name);
+          // select col1
+          if (tables.size() != 1) {
+            LOG_WARN("invalid. I do not know the attr's table. attr=%s", attribute_name.c_str());
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+
+          Table           *table      = tables[0];
+          const FieldMeta *field_meta = table->table_meta().field(attribute_name.c_str());
           if (nullptr == field_meta) {
-            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), attribute_name.c_str());
             return RC::SCHEMA_FIELD_MISSING;
           }
           auto field_expr = make_shared<FieldExpr>(table, field_meta);
-          field_expr->set_table_alias(table_name);
-          field_alias.emplace_back(relation_attr.alias);
-          query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
+          field_expr->set_table_alias(table->name());
+          query_exprs.emplace_back(field_expr);
         }
-      }
-    } else {
-      // select col1
-      if (tables.size() != 1) {
-        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
+        continue;
       }
 
-      Table           *table      = tables[0];
-      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-      if (nullptr == field_meta) {
-        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
+      if (expr->type() == ExprType::ARITHMETIC) {
+
+        continue;
       }
-      auto field_expr = make_shared<FieldExpr>(table, field_meta);
-      field_expr->set_table_alias(table->name());
-      query_exprs.emplace_back(field_expr);
+      if (expr->type() == ExprType::VALUE) {
+        LOG_WARN("shouldn't happen.");
+        continue;
+      }
       field_alias.emplace_back(relation_attr.alias);
     }
   }
@@ -362,8 +372,22 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   // collect group by expressions
   std::vector<shared_ptr<Expression>> group_by_exprs_;
   for (const auto &group_by_attr : select_sql.group_bys) {
-    const char *table_name = group_by_attr.relation_name.c_str();
-    const char *field_name = group_by_attr.attribute_name.c_str();
+    const char *table_name = nullptr;
+    const char *field_name = nullptr;
+    if (group_by_attr.is_expr) {
+      auto expr = group_by_attr.expr;
+      if (expr->type() == ExprType::FIELD) {
+        auto field_expr = dynamic_cast<FieldExpr *>(expr);
+        table_name      = field_expr->get_tmp_relation_name().c_str();
+        field_name      = field_expr->get_tmp_attribute_name().c_str();
+      } else {
+        LOG_WARN("shouldn't happen.");
+        return RC::INVALID_ARGUMENT;
+      }
+    } else {
+      table_name = group_by_attr.relation_name.c_str();
+      field_name = group_by_attr.attribute_name.c_str();
+    }
 
     if ((0 == strcmp(field_name, "*")) || (0 == strcmp(table_name, "*"))) {
       LOG_WARN("invalid field name in xx by stmt while table or filed is *. attr=%s", field_name);
@@ -385,7 +409,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
     }
     const FieldMeta *field_meta = table->table_meta().field(field_name);
     if (nullptr == field_meta) {
-      LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name);
+      LOG_WARN("no such field. field=%s.%s.", table->name(), field_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
 

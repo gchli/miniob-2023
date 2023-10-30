@@ -142,6 +142,7 @@ union YYSTYPE
   enum OrderType                    order_t;
   RelAttrSqlNode *                  aggr_func;
   RelAttrSqlNode *                  normal_func;
+  RelAttrSqlNode *                  expr_attr;
   RelAttrSqlNode *                  rel_attr;
   std::vector<AttrInfoSqlNode> *    attr_infos;
   AttrInfoSqlNode *                 attr_info;
@@ -151,7 +152,6 @@ union YYSTYPE
   std::vector<std::vector<Value>> * insert_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  // std::vector<std::string> *        relation_list;
   std::vector<std::pair<std::string, std::string>> *        relation_list;
   std::vector<std::string> *        attribute_list;
   std::vector<UpdateListSqlNode> *  update_list;
