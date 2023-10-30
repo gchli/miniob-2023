@@ -188,6 +188,13 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         }
         field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
+      } else if(0 == strcmp(field_name, "*") && relation_attr.aggr_type == COUNT_T){
+        // select count(*)
+
+        Table           *table      = new Table();
+        const FieldMeta *field_meta = new FieldMeta("*");
+        field_alias.emplace_back(relation_attr.alias);
+        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
       } else {
         if (tables.size() != 1) {
           LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
