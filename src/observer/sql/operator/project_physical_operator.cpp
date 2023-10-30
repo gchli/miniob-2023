@@ -73,11 +73,16 @@ Tuple *ProjectPhysicalOperator::current_tuple()
   return &tuple_;
 }
 
-void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
+void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, std::string alias)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+  TupleCellSpec *spec;
+  if (alias == "") {
+    spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+  } else {
+    spec = new TupleCellSpec(table->name(), field_meta->name(), alias.c_str());
+  }
   tuple_.add_cell_spec(spec);
 }
 

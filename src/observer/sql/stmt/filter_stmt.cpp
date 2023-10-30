@@ -377,31 +377,31 @@ right:
       filter_obj.init_expr(func_expr);
       filter_unit->set_right(filter_obj);
     } else {
-    Table           *table = nullptr;
-    const FieldMeta *field = nullptr;
-    bool from_ctx = false;
-    rc                     = get_table_and_field(db, default_table, tables, tables_alias, condition.right_attr, table, field, find_ctx, from_ctx);
-    if (rc != RC::SUCCESS) {
-      if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
-        table = default_table;
-        field = new FieldMeta("*");
-        rc    = RC::SUCCESS;
+      Table           *table = nullptr;
+      const FieldMeta *field = nullptr;
+      bool from_ctx = false;
+      rc                     = get_table_and_field(db, default_table, tables, tables_alias, condition.right_attr, table, field, find_ctx, from_ctx);
+      if (rc != RC::SUCCESS) {
+        if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
+          table = default_table;
+          field = new FieldMeta("*");
+          rc    = RC::SUCCESS;
+        }
+        if (table == nullptr || field == nullptr) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
       }
-      if (table == nullptr || field == nullptr) {
-        LOG_WARN("cannot find attr");
-        return rc;
+      FilterObj filter_obj;
+      if (from_ctx) {
+        filter_obj.init_father_attr(Field(table, field));
+      } else if (condition.left_attr.is_aggr) {
+        AggrType aggr_type = condition.left_attr.aggr_type;
+        filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
+      } else {
+        filter_obj.init_attr(Field(table, field));
       }
-    }
-    FilterObj filter_obj;
-    if (from_ctx) {
-      filter_obj.init_father_attr(Field(table, field));
-    } else if (condition.left_attr.is_aggr) {
-      AggrType aggr_type = condition.left_attr.aggr_type;
-      filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
-    } else {
-      filter_obj.init_attr(Field(table, field));
-    }
-    filter_unit->set_right(filter_obj);
+      filter_unit->set_right(filter_obj);
     }
   } else {
     FilterObj filter_obj;

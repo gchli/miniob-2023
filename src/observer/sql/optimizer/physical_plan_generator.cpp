@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -47,6 +48,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 #include "sql/stmt/select_stmt.h"
+#include "storage/field/field.h"
 
 using namespace std;
 
@@ -218,12 +220,14 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
 
   ProjectPhysicalOperator              *project_operator = new ProjectPhysicalOperator;
   const vector<shared_ptr<Expression>> &project_expr     = project_oper.proj_exprs();
-  for (const auto &expr : project_expr) {
+  const vector<string>                 &field_alias      = project_oper.field_alias();
+  for (int i = 0; i < project_expr.size(); ++i) {
+    const auto &expr = project_expr[i];
     if (expr->type() == ExprType::FUNCTION) {
       project_operator->add_projection(expr->name(), dynamic_pointer_cast<FunctionExpr>(expr));
       project_operator->add_function_expr(dynamic_pointer_cast<FunctionExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
-      project_operator->add_projection(expr->get_field().table(), expr->get_field().meta());
+      project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
     }
   }
   if (child_phy_oper) {

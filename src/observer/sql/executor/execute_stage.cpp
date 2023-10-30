@@ -72,23 +72,37 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
       SelectStmt *select_stmt     = static_cast<SelectStmt *>(stmt);
       bool        with_table_name = select_stmt->tables().size() > 1;
 
-      for (const shared_ptr<Expression> &expr : select_stmt->query_exprs()) {
+      for (int i = 0; i < select_stmt->query_exprs().size(); i++) {
+        const shared_ptr<Expression> &expr = select_stmt->query_exprs()[i];
+        const auto field_alias = select_stmt->field_alias()[i];
         if (expr->type() == ExprType::AGGREGATE) {
-          auto aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
-          schema.append_cell(aggr_expr->name(with_table_name).c_str());
+          if (field_alias != "") {
+            schema.append_cell(field_alias.c_str());
+          } else {
+            auto aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
+            schema.append_cell(aggr_expr->name(with_table_name).c_str());
+          }
           continue;
         }
         if (expr->type() == ExprType::FUNCTION) {
-          auto func_expr = dynamic_pointer_cast<FunctionExpr>(expr);
-          schema.append_cell(func_expr->name().c_str());
+          if (field_alias != "") {
+            schema.append_cell(field_alias.c_str());
+          } else {
+            auto func_expr = dynamic_pointer_cast<FunctionExpr>(expr);
+            schema.append_cell(func_expr->name().c_str());
+          }
           continue;
         }
         if (expr->type() == ExprType::FIELD) {
           auto field_expr = dynamic_pointer_cast<FieldExpr>(expr);
-          if (with_table_name) {
-            schema.append_cell(field_expr->table_name(), field_expr->field_name());
+          if (field_alias != "") {
+            schema.append_cell(field_alias.c_str());
           } else {
-            schema.append_cell(field_expr->field_name());
+            if (with_table_name) {
+              schema.append_cell(field_expr->table_name(), field_expr->field_name());
+            } else {
+              schema.append_cell(field_expr->field_name());
+            }
           }
         }
       }

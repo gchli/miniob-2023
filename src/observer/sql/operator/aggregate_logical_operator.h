@@ -14,8 +14,8 @@
 class AggregateLogicalOperator : public LogicalOperator
 {
 public:
-  AggregateLogicalOperator(const std::vector<shared_ptr<Expression>> &aggr_exprs);
-  AggregateLogicalOperator(const std::vector<shared_ptr<Expression>> &&aggr_exprs);
+  AggregateLogicalOperator(const std::vector<shared_ptr<Expression>> &aggr_exprs, const std::vector<std::string> &field_alias);
+  AggregateLogicalOperator(const std::vector<shared_ptr<Expression>> &&aggr_exprs, const std::vector<std::string> &&field_alias);
 
   // AggregateOperator() AggregateOperator(std::vector<std::unique_ptr<Expression>> &&expressions, AggrType aggr_type,
   // const char *table_name, const char *field_name, const char *alias);
@@ -39,6 +39,7 @@ public:
   shared_ptr<FilterStmt> get_having() const { return having_stmt_; }
   void set_having_exprs(std::vector<shared_ptr<Expression>> &having_exprs) { having_exprs_.swap(having_exprs); }
   std::vector<shared_ptr<Expression>> &get_having_exprs() { return having_exprs_; }
+  const std::vector<std::string> &field_alias() const { return field_alias_; }
 
 private:
   std::vector<shared_ptr<Expression>> aggr_exprs_;
@@ -47,4 +48,5 @@ private:
   std::vector<shared_ptr<Expression>> group_by_exprs_;
   shared_ptr<FilterStmt>              having_stmt_{nullptr};
   std::vector<shared_ptr<Expression>> having_exprs_;
+  std::vector<std::string>            field_alias_;
 };

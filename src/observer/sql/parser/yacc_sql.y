@@ -584,28 +584,34 @@ aggr_type:
     ;
 
 aggr_func:
-    aggr_type LBRACE ID RBRACE
+    aggr_type LBRACE ID RBRACE alias_optional
     {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->attribute_name = $3;
+      $$->alias = $5;
       free($3);
+      free($5);
     }
-    | aggr_type LBRACE ID DOT ID RBRACE {
+    | aggr_type LBRACE ID DOT ID RBRACE alias_optional {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->relation_name  = $3;
       $$->attribute_name = $5;
+      $$->alias = $7;
       free($3);
       free($5);
+      free($7);
 		}
-		| aggr_type LBRACE '*' RBRACE {
+		| aggr_type LBRACE '*' RBRACE alias_optional {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->attribute_name = "*";
+      $$->alias = $5;
+      free($5);
 		}
     ;
 
@@ -941,15 +947,19 @@ rel_attr:
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->attribute_name = $1;
+      $$->alias = $2;
       free($1);
+      free($2);
     }
     | ID DOT ID alias_optional {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
+      $$->alias = $4;
       free($1);
       free($3);
+      free($4);
     }
     ;
 

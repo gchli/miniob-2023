@@ -18,6 +18,6 @@ See the Mulan PSL v2 for more details. */
 
 // ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields) : fields_(fields) {}
 
-ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<shared_ptr<Expression>> &proj_expr)
-    : proj_exprs_(proj_expr)
+ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<shared_ptr<Expression>> &proj_expr, const std::vector<std::string> &field_alias)
+    : proj_exprs_(proj_expr), field_alias_(field_alias)
 {}

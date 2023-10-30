@@ -235,10 +235,10 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
 
   if (!has_aggr && !has_group_by) {
-    auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_query_exprs));
+    auto proj_oper = std::move(make_unique<ProjectLogicalOperator>(all_query_exprs, select_stmt->field_alias()));
     select_oper    = std::move(proj_oper);
   } else {
-    auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_query_exprs));
+    auto aggr_oper = std::move(make_unique<AggregateLogicalOperator>(all_query_exprs, select_stmt->field_alias()));
     if (has_group_by) {
       aggr_oper->set_group_bys(select_stmt->group_by_exprs());
     }

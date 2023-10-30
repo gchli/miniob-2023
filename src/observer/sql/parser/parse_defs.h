@@ -178,7 +178,7 @@ struct SelectSqlNode
 {
   std::vector<RelAttrSqlNode> attributes;  ///< attributes in select clause
   // std::vector<std::string>                     relations;   ///< 查询的表
-  std::vector<std::pair<std::string, std::string>> relations;  ///< 查询的表
+  std::vector<std::pair<std::string, std::string>> relations;  ///< 查询的表 (relation name, alias)
   // std::unordered_map<std::string, std::string> relations_alias;
   std::vector<ConditionSqlNode> conditions;  ///< 查询条件，使用AND串联起来多个条件
   std::vector<InnerJoinSqlNode> joins;
@@ -268,6 +268,16 @@ struct CreateTableSqlNode
 {
   std::string                  relation_name;  ///< Relation name
   std::vector<AttrInfoSqlNode> attr_infos;     ///< attributes
+};
+
+/**
+  * @brief 描述一个create view语句
+  * @ingroup SQLParser
+  */
+struct CreateViewSqlNode
+{
+  std::string view_name;
+  SelectSqlNode *select;
 };
 
 /**

@@ -26,8 +26,10 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 SelectStmt::~SelectStmt()
@@ -47,7 +49,7 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   }
 }
 
-static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &field_metas, string table_alias)
+static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &field_metas, string table_alias, std::vector<std::string> &field_alias)
 {
   const TableMeta &table_meta = table->table_meta();
   const int        field_num  = table_meta.field_num();
@@ -57,6 +59,7 @@ static void wildcard_fields(Table *table, std::vector<shared_ptr<Expression>> &f
       field_expr->set_table_alias(table_alias);
     }
     field_metas.push_back(field_expr);
+    field_alias.emplace_back("");
   }
 }
 
@@ -95,6 +98,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         return RC::INVALID_ARGUMENT;
       }
       table_alias.insert(std::pair<std::string, std::string>(table_name_alias, table_name_str));
+      FilterCtx::get_instance().table_names_.insert(std::pair<std::string, Table *>(table_name_alias, table));
     }
     FilterCtx::get_instance().table_names_.insert(std::pair<std::string, Table *>(table_name, table));
   }
@@ -147,6 +151,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
 
   // collect query expressions
   std::vector<shared_ptr<Expression>> query_exprs;
+  std::vector<std::string> field_alias;
 
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
@@ -181,6 +186,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
             return RC::SCHEMA_FIELD_MISSING;
           }
         }
+        field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
       } else {
         if (tables.size() != 1) {
@@ -198,6 +204,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
             return RC::SCHEMA_FIELD_MISSING;
           }
         }
+        field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
       }
       continue;
@@ -211,32 +218,36 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         return rc;
       }
       if (func_expr != nullptr) {
+        field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(func_expr);
       }
       continue;
     }
 
     // create field expressions
-    auto rel_alias = relation_attr.alias;
     if (common::is_blank(relation_attr.relation_name.c_str()) &&
         0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
+      // select *
       for (Table *table : tables) {
-        wildcard_fields(table, query_exprs, "");  // todo: fix alias
+        wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
       }
 
     } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
       const char *table_name = relation_attr.relation_name.c_str();
       const char *field_name = relation_attr.attribute_name.c_str();
+      const char *alias_name = relation_attr.alias.c_str();
 
       if (0 == strcmp(table_name, "*")) {
+        // select *.col
         if (0 != strcmp(field_name, "*")) {
           LOG_WARN("invalid field name while table is *. attr=%s", field_name);
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_exprs, "");  // todo: fix alias
+          wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
         }
       } else {
+        // select table1.col1
         auto iter = table_map.find(table_name);
         if (iter == table_map.end()) {
           if (table_alias.find(string(table_name)) == table_alias.end()) {
@@ -253,7 +264,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_exprs, table_name);
+          wildcard_fields(table, query_exprs, table_name, field_alias);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
@@ -262,11 +273,12 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           }
           auto field_expr = make_shared<FieldExpr>(table, field_meta);
           field_expr->set_table_alias(table_name);
-          field_expr->set_field_alias(rel_alias);
+          field_alias.emplace_back(relation_attr.alias);
           query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
         }
       }
     } else {
+      // select col1
       if (tables.size() != 1) {
         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
         return RC::SCHEMA_FIELD_MISSING;
@@ -280,8 +292,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
       }
       auto field_expr = make_shared<FieldExpr>(table, field_meta);
       field_expr->set_table_alias(table->name());
-      field_expr->set_field_alias(rel_alias);
       query_exprs.emplace_back(field_expr);
+      field_alias.emplace_back(relation_attr.alias);
     }
   }
 
@@ -475,6 +487,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   select_stmt->group_by_exprs_.swap(group_by_exprs_);
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->having_exprs_.swap(having_exprs);
+  select_stmt->field_alias_.swap(field_alias);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

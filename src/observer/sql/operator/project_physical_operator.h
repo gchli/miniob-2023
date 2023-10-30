@@ -31,7 +31,7 @@ public:
   virtual ~ProjectPhysicalOperator() = default;
 
   void                 add_expressions(std::vector<std::unique_ptr<Expression>> &&expressions) {}
-  void                 add_projection(const Table *table, const FieldMeta *field);
+  void                 add_projection(const Table *table, const FieldMeta *field, const std::string alias="");
   void                 add_projection(const std::string &alias);
   void                 add_projection(const std::string &alias, shared_ptr<Expression> expr);
   void                 add_function_expr(const shared_ptr<FunctionExpr> &func_expr);
