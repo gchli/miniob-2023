@@ -116,7 +116,7 @@ Grammar
    80 select_stmt: select_body
 
    81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by
-   82            | SELECT select_attr
+   82            | SELECT normal_func attr_list
 
    83 calc_stmt: CALC expression_list
 
@@ -388,7 +388,7 @@ Nonterminals, with rules where they appear
         on right: 53 54 55 56
     normal_func <normal_func> (103)
         on left: 53 54 55 56
-        on right: 96 106 124 140 141 142 143 144
+        on right: 82 96 106 124 140 141 142 143 144
     aggr_type <aggr_t> (104)
         on left: 57 58 59 60 61
         on right: 62 63 64
@@ -436,7 +436,7 @@ Nonterminals, with rules where they appear
         on right: 84 85 86 87 88 89 90 91
     select_attr <rel_attr_list> (119)
         on left: 93 94 95 96
-        on right: 81 82
+        on right: 81
     alias_optional <string> (120)
         on left: 97 98 99
         on right: 53 54 55 56 62 63 64 81 100 101 108
@@ -445,7 +445,7 @@ Nonterminals, with rules where they appear
         on right: 53 54 94 104 114 122 136 138 139 140 141 148 149 153
     attr_list <rel_attr_list> (122)
         on left: 103 104 105 106
-        on right: 94 95 96 104 105 106 122 123 124
+        on right: 82 94 95 96 104 105 106 122 123 124
     rel_list <relation_list> (123)
         on left: 107 108
         on right: 81 108
@@ -592,7 +592,7 @@ State 3
 State 4
 
    81 select_body: SELECT . select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by
-   82            | SELECT . select_attr
+   82            | SELECT . normal_func attr_list
 
     MAX          shift, and go to state 56
     MIN          shift, and go to state 57
@@ -1131,6 +1131,7 @@ State 66
 
 State 67
 
+   82 select_body: SELECT normal_func . attr_list
    96 select_attr: normal_func . attr_list
 
     COMMA  shift, and go to state 100
@@ -1163,11 +1164,8 @@ State 69
 State 70
 
    81 select_body: SELECT select_attr . FROM ID alias_optional rel_list inner_join_list where group_by having order_by
-   82            | SELECT select_attr .
 
     FROM  shift, and go to state 104
-
-    $default  reduce using rule 82 (select_body)
 
 
 State 71
@@ -1467,9 +1465,11 @@ State 100
 
 State 101
 
+   82 select_body: SELECT normal_func attr_list .
    96 select_attr: normal_func attr_list .
 
-    $default  reduce using rule 96 (select_attr)
+    FROM      reduce using rule 96 (select_attr)
+    $default  reduce using rule 82 (select_body)
 
 
 State 102

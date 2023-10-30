@@ -823,13 +823,15 @@ select_body:
       free($4);
     }
     |
-    SELECT select_attr // for functions (and expression)
+    SELECT normal_func attr_list // for functions (and expression)
     {
       $$ = new SelectSqlNode;
-      if ($2 != nullptr) {
-        $$->attributes.swap(*$2);
-        delete $2;
+      if ($3 != nullptr) {
+        $$->attributes.swap(*$3);
+        delete $3;
       }
+      $$->attributes.emplace_back(*$2);
+      free($2);
     }
     ;
 
