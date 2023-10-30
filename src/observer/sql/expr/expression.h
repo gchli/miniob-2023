@@ -155,13 +155,14 @@ public:
 
   const char *field_name() const override { return field_.field_name(); }
 
-  RC                 get_value(const Tuple &tuple, Value &value) const override;
-  const std::string  get_field_alias() const { return field_alias_; }
-  void               set_field_alias(const std::string &alias) { field_alias_ = alias; }
-  const std::string  get_table_alias() const { return table_alias_; }
-  void               set_table_alias(const std::string &alias) { table_alias_ = alias; }
-  const std::string &get_tmp_relation_name() const { return tmp_relation_name_; }
-  const std::string &get_tmp_attribute_name() const { return tmp_attribute_name_; }
+  RC                          get_value(const Tuple &tuple, Value &value) const override;
+  const std::string           get_field_alias() const { return field_alias_; }
+  void                        set_field_alias(const std::string &alias) { field_alias_ = alias; }
+  const std::string           get_table_alias() const { return table_alias_; }
+  void                        set_table_alias(const std::string &alias) { table_alias_ = alias; }
+  const std::string          &get_tmp_relation_name() const { return tmp_relation_name_; }
+  const std::string          &get_tmp_attribute_name() const { return tmp_attribute_name_; }
+  std::unique_ptr<Expression> clone() const override { return std::make_unique<FieldExpr>(field_); }
 
 private:
   Field       field_;
