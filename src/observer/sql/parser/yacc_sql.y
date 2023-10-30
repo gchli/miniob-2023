@@ -961,6 +961,13 @@ rel_attr:
       free($3);
       free($4);
     }
+    | ID DOT '*' {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->relation_name  = $1;
+      $$->attribute_name = '*';
+      free($1);
+    }
     ;
 
 attr_list:

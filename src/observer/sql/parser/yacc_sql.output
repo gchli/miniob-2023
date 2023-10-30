@@ -1,0 +1,3785 @@
+Grammar
+
+    0 $accept: commands $end
+
+    1 commands: command_wrapper opt_semicolon
+
+    2 command_wrapper: calc_stmt
+    3                | select_stmt
+    4                | insert_stmt
+    5                | update_stmt
+    6                | delete_stmt
+    7                | create_table_stmt
+    8                | drop_table_stmt
+    9                | show_tables_stmt
+   10                | desc_table_stmt
+   11                | create_index_stmt
+   12                | drop_index_stmt
+   13                | sync_stmt
+   14                | begin_stmt
+   15                | commit_stmt
+   16                | rollback_stmt
+   17                | load_data_stmt
+   18                | explain_stmt
+   19                | set_variable_stmt
+   20                | help_stmt
+   21                | exit_stmt
+
+   22 exit_stmt: EXIT
+
+   23 help_stmt: HELP
+
+   24 sync_stmt: SYNC
+
+   25 begin_stmt: TRX_BEGIN
+
+   26 commit_stmt: TRX_COMMIT
+
+   27 rollback_stmt: TRX_ROLLBACK
+
+   28 drop_table_stmt: DROP TABLE ID
+
+   29 show_tables_stmt: SHOW TABLES
+
+   30 desc_table_stmt: DESC ID
+
+   31 create_index_stmt: CREATE INDEX ID ON ID LBRACE ID id_list RBRACE
+   32                  | CREATE UNIQUE INDEX ID ON ID LBRACE ID id_list RBRACE
+
+   33 id_list: %empty
+   34        | COMMA ID id_list
+
+   35 drop_index_stmt: DROP INDEX ID ON ID
+
+   36 create_table_stmt: CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE
+
+   37 attr_def_list: %empty
+   38              | COMMA attr_def attr_def_list
+
+   39 attr_def: ID type LBRACE number RBRACE attr_null
+   40         | ID TEXT_T attr_null
+   41         | ID type attr_null
+
+   42 attr_null: %empty
+   43          | NOT NULL_T
+   44          | NULL_T
+
+   45 number: NUMBER
+
+   46 type: INT_T
+   47     | STRING_T
+   48     | FLOAT_T
+   49     | DATE_T
+
+   50 func_type: LENGTH
+   51          | DATE_FORMAT
+   52          | ROUND
+
+   53 normal_func: func_type LBRACE rel_attr RBRACE alias_optional
+   54            | func_type LBRACE rel_attr COMMA value RBRACE alias_optional
+   55            | func_type LBRACE value RBRACE alias_optional
+   56            | func_type LBRACE value COMMA value RBRACE alias_optional
+
+   57 aggr_type: MAX
+   58          | MIN
+   59          | AVG
+   60          | SUM
+   61          | COUNT
+
+   62 aggr_func: aggr_type LBRACE ID RBRACE alias_optional
+   63          | aggr_type LBRACE ID DOT ID RBRACE alias_optional
+   64          | aggr_type LBRACE '*' RBRACE alias_optional
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_list
+
+   66 insert_list: %empty
+   67            | COMMA LBRACE value value_list RBRACE insert_list
+
+   68 value_list: %empty
+   69           | COMMA value value_list
+
+   70 value: NUMBER
+   71      | FLOAT
+   72      | SSS
+   73      | NULL_T
+
+   74 delete_stmt: DELETE FROM ID where
+
+   75 update_stmt: UPDATE ID SET update_pair update_list where
+
+   76 update_pair: ID EQ value
+   77            | ID EQ LBRACE select_body RBRACE
+
+   78 update_list: %empty
+   79            | COMMA update_pair update_list
+
+   80 select_stmt: select_body
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by
+   82            | SELECT select_attr
+
+   83 calc_stmt: CALC expression_list
+
+   84 expression_list: expression
+   85                | expression COMMA expression_list
+
+   86 expression: expression '+' expression
+   87           | expression '-' expression
+   88           | expression '*' expression
+   89           | expression '/' expression
+   90           | LBRACE expression RBRACE
+   91           | '-' expression
+   92           | value
+
+   93 select_attr: '*'
+   94            | rel_attr attr_list
+   95            | aggr_func attr_list
+   96            | normal_func attr_list
+
+   97 alias_optional: %empty
+   98               | ID
+   99               | AS ID
+
+  100 rel_attr: ID alias_optional
+  101         | ID DOT ID alias_optional
+  102         | ID DOT '*'
+
+  103 attr_list: %empty
+  104          | COMMA rel_attr attr_list
+  105          | COMMA aggr_func attr_list
+  106          | COMMA normal_func attr_list
+
+  107 rel_list: %empty
+  108         | COMMA ID alias_optional rel_list
+
+  109 order_by: %empty
+  110         | ORDER BY order_by_list
+
+  111 order_type: %empty
+  112           | ASC
+  113           | DESC
+
+  114 order_by_attr: rel_attr order_type
+
+  115 order_by_list: order_by_attr
+  116              | order_by_attr COMMA order_by_list
+
+  117 where: %empty
+  118      | WHERE condition_list
+
+  119 having: %empty
+  120       | HAVING condition_list
+
+  121 group_by: %empty
+  122         | GROUP BY rel_attr attr_list
+  123         | GROUP BY aggr_func attr_list
+  124         | GROUP BY normal_func attr_list
+
+  125 inner_join_list: %empty
+  126                | inner_join inner_join_list
+
+  127 inner_join: INNER JOIN ID ON join_condition_list
+
+  128 join_condition: condition
+
+  129 join_condition_list: %empty
+  130                    | join_condition
+  131                    | join_condition AND join_condition_list
+
+  132 condition_list: %empty
+  133               | condition
+  134               | condition AND condition_list
+  135               | condition OR condition_list
+
+  136 condition: rel_attr comp_op value
+  137          | value comp_op value
+  138          | rel_attr comp_op rel_attr
+  139          | value comp_op rel_attr
+  140          | normal_func comp_op rel_attr
+  141          | rel_attr comp_op normal_func
+  142          | value comp_op normal_func
+  143          | normal_func comp_op value
+  144          | normal_func comp_op normal_func
+  145          | value comp_op aggr_func
+  146          | aggr_func comp_op value
+  147          | value comp_op LBRACE select_body RBRACE
+  148          | rel_attr comp_op LBRACE select_body RBRACE
+  149          | LBRACE select_body RBRACE comp_op rel_attr
+  150          | LBRACE select_body RBRACE comp_op value
+  151          | LBRACE select_body RBRACE comp_op LBRACE select_body RBRACE
+  152          | comp_op LBRACE select_body RBRACE
+  153          | rel_attr comp_op LBRACE value value_list RBRACE
+
+  154 comp_op: EQ
+  155        | LT
+  156        | GT
+  157        | LE
+  158        | GE
+  159        | NE
+  160        | LIKE
+  161        | NOT LIKE
+  162        | IS_T
+  163        | IS_T NOT
+  164        | IN_T
+  165        | NOT IN_T
+  166        | EXIST_T
+  167        | NOT EXIST_T
+
+  168 load_data_stmt: LOAD DATA INFILE SSS INTO TABLE ID
+
+  169 explain_stmt: EXPLAIN command_wrapper
+
+  170 set_variable_stmt: SET ID EQ value
+
+  171 opt_semicolon: %empty
+  172              | SEMICOLON
+
+
+Terminals, with rules where they appear
+
+    $end (0) 0
+    '*' (42) 64 88 93 102
+    '+' (43) 86
+    '-' (45) 87 91
+    '/' (47) 89
+    error (256)
+    SEMICOLON (258) 172
+    CREATE (259) 31 32 36
+    DROP (260) 28 35
+    TABLE (261) 28 36 168
+    TABLES (262) 29
+    INDEX (263) 31 32 35
+    CALC (264) 83
+    SELECT (265) 81 82
+    DESC (266) 30 113
+    SHOW (267) 29
+    SYNC (268) 24
+    INSERT (269) 65
+    DELETE (270) 74
+    UPDATE (271) 75
+    LBRACE (272) 31 32 36 39 53 54 55 56 62 63 64 65 67 77 90 147 148 149 150 151 152 153
+    RBRACE (273) 31 32 36 39 53 54 55 56 62 63 64 65 67 77 90 147 148 149 150 151 152 153
+    COMMA (274) 34 38 54 56 67 69 79 85 104 105 106 108 116
+    TRX_BEGIN (275) 25
+    TRX_COMMIT (276) 26
+    TRX_ROLLBACK (277) 27
+    INT_T (278) 46
+    STRING_T (279) 47
+    FLOAT_T (280) 48
+    DATE_T (281) 49
+    TEXT_T (282) 40
+    HELP (283) 23
+    EXIT (284) 22
+    DOT (285) 63 101 102
+    INTO (286) 65 168
+    VALUES (287) 65
+    FROM (288) 74 81
+    WHERE (289) 118
+    AND (290) 131 134
+    OR (291) 135
+    SET (292) 75 170
+    ON (293) 31 32 35 127
+    LOAD (294) 168
+    DATA (295) 168
+    INFILE (296) 168
+    EXPLAIN (297) 169
+    EQ (298) 76 77 154 170
+    LT (299) 155
+    GT (300) 156
+    LE (301) 157
+    GE (302) 158
+    NE (303) 159
+    MAX (304) 57
+    MIN (305) 58
+    AVG (306) 59
+    SUM (307) 60
+    COUNT (308) 61
+    LIKE (309) 160 161
+    NOT (310) 43 161 163 165 167
+    UNIQUE (311) 32
+    NULL_T (312) 43 44 73
+    IS_T (313) 162 163
+    INNER (314) 127
+    JOIN (315) 127
+    ORDER (316) 110
+    BY (317) 110 122 123 124
+    ASC (318) 112
+    HAVING (319) 120
+    GROUP (320) 122 123 124
+    IN_T (321) 164 165
+    EXIST_T (322) 166 167
+    LENGTH (323) 50
+    DATE_FORMAT (324) 51
+    ROUND (325) 52
+    AS (326) 99
+    NUMBER <number> (327) 45 70
+    FLOAT <floats> (328) 71
+    ID <string> (329) 28 30 31 32 34 35 36 39 40 41 62 63 65 74 75 76 77 81 98 99 100 101 102 108 127 168 170
+    SSS <string> (330) 72 168
+    UMINUS (331)
+
+
+Nonterminals, with rules where they appear
+
+    $accept (81)
+        on left: 0
+    commands <sql_node> (82)
+        on left: 1
+        on right: 0
+    command_wrapper <sql_node> (83)
+        on left: 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21
+        on right: 1 169
+    exit_stmt <sql_node> (84)
+        on left: 22
+        on right: 21
+    help_stmt <sql_node> (85)
+        on left: 23
+        on right: 20
+    sync_stmt <sql_node> (86)
+        on left: 24
+        on right: 13
+    begin_stmt <sql_node> (87)
+        on left: 25
+        on right: 14
+    commit_stmt <sql_node> (88)
+        on left: 26
+        on right: 15
+    rollback_stmt <sql_node> (89)
+        on left: 27
+        on right: 16
+    drop_table_stmt <sql_node> (90)
+        on left: 28
+        on right: 8
+    show_tables_stmt <sql_node> (91)
+        on left: 29
+        on right: 9
+    desc_table_stmt <sql_node> (92)
+        on left: 30
+        on right: 10
+    create_index_stmt <sql_node> (93)
+        on left: 31 32
+        on right: 11
+    id_list <attribute_list> (94)
+        on left: 33 34
+        on right: 31 32 34
+    drop_index_stmt <sql_node> (95)
+        on left: 35
+        on right: 12
+    create_table_stmt <sql_node> (96)
+        on left: 36
+        on right: 7
+    attr_def_list <attr_infos> (97)
+        on left: 37 38
+        on right: 36 38
+    attr_def <attr_info> (98)
+        on left: 39 40 41
+        on right: 36 38
+    attr_null <is_null> (99)
+        on left: 42 43 44
+        on right: 39 40 41
+    number <number> (100)
+        on left: 45
+        on right: 39
+    type <number> (101)
+        on left: 46 47 48 49
+        on right: 39 41
+    func_type <func_t> (102)
+        on left: 50 51 52
+        on right: 53 54 55 56
+    normal_func <normal_func> (103)
+        on left: 53 54 55 56
+        on right: 96 106 124 140 141 142 143 144
+    aggr_type <aggr_t> (104)
+        on left: 57 58 59 60 61
+        on right: 62 63 64
+    aggr_func <aggr_func> (105)
+        on left: 62 63 64
+        on right: 95 105 123 145 146
+    insert_stmt <sql_node> (106)
+        on left: 65
+        on right: 4
+    insert_list <insert_list> (107)
+        on left: 66 67
+        on right: 65 67
+    value_list <value_list> (108)
+        on left: 68 69
+        on right: 65 67 69 153
+    value <value> (109)
+        on left: 70 71 72 73
+        on right: 54 55 56 65 67 69 76 92 136 137 139 142 143 145 146 147 150 153 170
+    delete_stmt <sql_node> (110)
+        on left: 74
+        on right: 6
+    update_stmt <sql_node> (111)
+        on left: 75
+        on right: 5
+    update_pair <update_pair> (112)
+        on left: 76 77
+        on right: 75 79
+    update_list <update_list> (113)
+        on left: 78 79
+        on right: 75 79
+    select_stmt <sql_node> (114)
+        on left: 80
+        on right: 3
+    select_body <select_body> (115)
+        on left: 81 82
+        on right: 77 80 147 148 149 150 151 152
+    calc_stmt <sql_node> (116)
+        on left: 83
+        on right: 2
+    expression_list <expression_list> (117)
+        on left: 84 85
+        on right: 83 85
+    expression <expression> (118)
+        on left: 86 87 88 89 90 91 92
+        on right: 84 85 86 87 88 89 90 91
+    select_attr <rel_attr_list> (119)
+        on left: 93 94 95 96
+        on right: 81 82
+    alias_optional <string> (120)
+        on left: 97 98 99
+        on right: 53 54 55 56 62 63 64 81 100 101 108
+    rel_attr <rel_attr> (121)
+        on left: 100 101 102
+        on right: 53 54 94 104 114 122 136 138 139 140 141 148 149 153
+    attr_list <rel_attr_list> (122)
+        on left: 103 104 105 106
+        on right: 94 95 96 104 105 106 122 123 124
+    rel_list <relation_list> (123)
+        on left: 107 108
+        on right: 81 108
+    order_by <order_by_list> (124)
+        on left: 109 110
+        on right: 81
+    order_type <order_t> (125)
+        on left: 111 112 113
+        on right: 114
+    order_by_attr <order_by_attr> (126)
+        on left: 114
+        on right: 115 116
+    order_by_list <order_by_list> (127)
+        on left: 115 116
+        on right: 110 116
+    where <condition_list> (128)
+        on left: 117 118
+        on right: 74 75 81
+    having <condition_list> (129)
+        on left: 119 120
+        on right: 81
+    group_by <rel_attr_list> (130)
+        on left: 121 122 123 124
+        on right: 81
+    inner_join_list <inner_join_list> (131)
+        on left: 125 126
+        on right: 81 126
+    inner_join <inner_join> (132)
+        on left: 127
+        on right: 126
+    join_condition <condition> (133)
+        on left: 128
+        on right: 130 131
+    join_condition_list <condition_list> (134)
+        on left: 129 130 131
+        on right: 127 131
+    condition_list <condition_list> (135)
+        on left: 132 133 134 135
+        on right: 118 120 134 135
+    condition <condition> (136)
+        on left: 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+        on right: 128 133 134 135
+    comp_op <comp> (137)
+        on left: 154 155 156 157 158 159 160 161 162 163 164 165 166 167
+        on right: 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+    load_data_stmt <sql_node> (138)
+        on left: 168
+        on right: 17
+    explain_stmt <sql_node> (139)
+        on left: 169
+        on right: 18
+    set_variable_stmt <sql_node> (140)
+        on left: 170
+        on right: 19
+    opt_semicolon (141)
+        on left: 171 172
+        on right: 1
+
+
+State 0
+
+    0 $accept: . commands $end
+
+    CREATE        shift, and go to state 1
+    DROP          shift, and go to state 2
+    CALC          shift, and go to state 3
+    SELECT        shift, and go to state 4
+    DESC          shift, and go to state 5
+    SHOW          shift, and go to state 6
+    SYNC          shift, and go to state 7
+    INSERT        shift, and go to state 8
+    DELETE        shift, and go to state 9
+    UPDATE        shift, and go to state 10
+    TRX_BEGIN     shift, and go to state 11
+    TRX_COMMIT    shift, and go to state 12
+    TRX_ROLLBACK  shift, and go to state 13
+    HELP          shift, and go to state 14
+    EXIT          shift, and go to state 15
+    SET           shift, and go to state 16
+    LOAD          shift, and go to state 17
+    EXPLAIN       shift, and go to state 18
+
+    commands           go to state 19
+    command_wrapper    go to state 20
+    exit_stmt          go to state 21
+    help_stmt          go to state 22
+    sync_stmt          go to state 23
+    begin_stmt         go to state 24
+    commit_stmt        go to state 25
+    rollback_stmt      go to state 26
+    drop_table_stmt    go to state 27
+    show_tables_stmt   go to state 28
+    desc_table_stmt    go to state 29
+    create_index_stmt  go to state 30
+    drop_index_stmt    go to state 31
+    create_table_stmt  go to state 32
+    insert_stmt        go to state 33
+    delete_stmt        go to state 34
+    update_stmt        go to state 35
+    select_stmt        go to state 36
+    select_body        go to state 37
+    calc_stmt          go to state 38
+    load_data_stmt     go to state 39
+    explain_stmt       go to state 40
+    set_variable_stmt  go to state 41
+
+
+State 1
+
+   31 create_index_stmt: CREATE . INDEX ID ON ID LBRACE ID id_list RBRACE
+   32                  | CREATE . UNIQUE INDEX ID ON ID LBRACE ID id_list RBRACE
+   36 create_table_stmt: CREATE . TABLE ID LBRACE attr_def attr_def_list RBRACE
+
+    TABLE   shift, and go to state 42
+    INDEX   shift, and go to state 43
+    UNIQUE  shift, and go to state 44
+
+
+State 2
+
+   28 drop_table_stmt: DROP . TABLE ID
+   35 drop_index_stmt: DROP . INDEX ID ON ID
+
+    TABLE  shift, and go to state 45
+    INDEX  shift, and go to state 46
+
+
+State 3
+
+   83 calc_stmt: CALC . expression_list
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value            go to state 53
+    expression_list  go to state 54
+    expression       go to state 55
+
+
+State 4
+
+   81 select_body: SELECT . select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by
+   82            | SELECT . select_attr
+
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    ID           shift, and go to state 64
+    '*'          shift, and go to state 65
+
+    func_type    go to state 66
+    normal_func  go to state 67
+    aggr_type    go to state 68
+    aggr_func    go to state 69
+    select_attr  go to state 70
+    rel_attr     go to state 71
+
+
+State 5
+
+   30 desc_table_stmt: DESC . ID
+
+    ID  shift, and go to state 72
+
+
+State 6
+
+   29 show_tables_stmt: SHOW . TABLES
+
+    TABLES  shift, and go to state 73
+
+
+State 7
+
+   24 sync_stmt: SYNC .
+
+    $default  reduce using rule 24 (sync_stmt)
+
+
+State 8
+
+   65 insert_stmt: INSERT . INTO ID VALUES LBRACE value value_list RBRACE insert_list
+
+    INTO  shift, and go to state 74
+
+
+State 9
+
+   74 delete_stmt: DELETE . FROM ID where
+
+    FROM  shift, and go to state 75
+
+
+State 10
+
+   75 update_stmt: UPDATE . ID SET update_pair update_list where
+
+    ID  shift, and go to state 76
+
+
+State 11
+
+   25 begin_stmt: TRX_BEGIN .
+
+    $default  reduce using rule 25 (begin_stmt)
+
+
+State 12
+
+   26 commit_stmt: TRX_COMMIT .
+
+    $default  reduce using rule 26 (commit_stmt)
+
+
+State 13
+
+   27 rollback_stmt: TRX_ROLLBACK .
+
+    $default  reduce using rule 27 (rollback_stmt)
+
+
+State 14
+
+   23 help_stmt: HELP .
+
+    $default  reduce using rule 23 (help_stmt)
+
+
+State 15
+
+   22 exit_stmt: EXIT .
+
+    $default  reduce using rule 22 (exit_stmt)
+
+
+State 16
+
+  170 set_variable_stmt: SET . ID EQ value
+
+    ID  shift, and go to state 77
+
+
+State 17
+
+  168 load_data_stmt: LOAD . DATA INFILE SSS INTO TABLE ID
+
+    DATA  shift, and go to state 78
+
+
+State 18
+
+  169 explain_stmt: EXPLAIN . command_wrapper
+
+    CREATE        shift, and go to state 1
+    DROP          shift, and go to state 2
+    CALC          shift, and go to state 3
+    SELECT        shift, and go to state 4
+    DESC          shift, and go to state 5
+    SHOW          shift, and go to state 6
+    SYNC          shift, and go to state 7
+    INSERT        shift, and go to state 8
+    DELETE        shift, and go to state 9
+    UPDATE        shift, and go to state 10
+    TRX_BEGIN     shift, and go to state 11
+    TRX_COMMIT    shift, and go to state 12
+    TRX_ROLLBACK  shift, and go to state 13
+    HELP          shift, and go to state 14
+    EXIT          shift, and go to state 15
+    SET           shift, and go to state 16
+    LOAD          shift, and go to state 17
+    EXPLAIN       shift, and go to state 18
+
+    command_wrapper    go to state 79
+    exit_stmt          go to state 21
+    help_stmt          go to state 22
+    sync_stmt          go to state 23
+    begin_stmt         go to state 24
+    commit_stmt        go to state 25
+    rollback_stmt      go to state 26
+    drop_table_stmt    go to state 27
+    show_tables_stmt   go to state 28
+    desc_table_stmt    go to state 29
+    create_index_stmt  go to state 30
+    drop_index_stmt    go to state 31
+    create_table_stmt  go to state 32
+    insert_stmt        go to state 33
+    delete_stmt        go to state 34
+    update_stmt        go to state 35
+    select_stmt        go to state 36
+    select_body        go to state 37
+    calc_stmt          go to state 38
+    load_data_stmt     go to state 39
+    explain_stmt       go to state 40
+    set_variable_stmt  go to state 41
+
+
+State 19
+
+    0 $accept: commands . $end
+
+    $end  shift, and go to state 80
+
+
+State 20
+
+    1 commands: command_wrapper . opt_semicolon
+
+    SEMICOLON  shift, and go to state 81
+
+    $default  reduce using rule 171 (opt_semicolon)
+
+    opt_semicolon  go to state 82
+
+
+State 21
+
+   21 command_wrapper: exit_stmt .
+
+    $default  reduce using rule 21 (command_wrapper)
+
+
+State 22
+
+   20 command_wrapper: help_stmt .
+
+    $default  reduce using rule 20 (command_wrapper)
+
+
+State 23
+
+   13 command_wrapper: sync_stmt .
+
+    $default  reduce using rule 13 (command_wrapper)
+
+
+State 24
+
+   14 command_wrapper: begin_stmt .
+
+    $default  reduce using rule 14 (command_wrapper)
+
+
+State 25
+
+   15 command_wrapper: commit_stmt .
+
+    $default  reduce using rule 15 (command_wrapper)
+
+
+State 26
+
+   16 command_wrapper: rollback_stmt .
+
+    $default  reduce using rule 16 (command_wrapper)
+
+
+State 27
+
+    8 command_wrapper: drop_table_stmt .
+
+    $default  reduce using rule 8 (command_wrapper)
+
+
+State 28
+
+    9 command_wrapper: show_tables_stmt .
+
+    $default  reduce using rule 9 (command_wrapper)
+
+
+State 29
+
+   10 command_wrapper: desc_table_stmt .
+
+    $default  reduce using rule 10 (command_wrapper)
+
+
+State 30
+
+   11 command_wrapper: create_index_stmt .
+
+    $default  reduce using rule 11 (command_wrapper)
+
+
+State 31
+
+   12 command_wrapper: drop_index_stmt .
+
+    $default  reduce using rule 12 (command_wrapper)
+
+
+State 32
+
+    7 command_wrapper: create_table_stmt .
+
+    $default  reduce using rule 7 (command_wrapper)
+
+
+State 33
+
+    4 command_wrapper: insert_stmt .
+
+    $default  reduce using rule 4 (command_wrapper)
+
+
+State 34
+
+    6 command_wrapper: delete_stmt .
+
+    $default  reduce using rule 6 (command_wrapper)
+
+
+State 35
+
+    5 command_wrapper: update_stmt .
+
+    $default  reduce using rule 5 (command_wrapper)
+
+
+State 36
+
+    3 command_wrapper: select_stmt .
+
+    $default  reduce using rule 3 (command_wrapper)
+
+
+State 37
+
+   80 select_stmt: select_body .
+
+    $default  reduce using rule 80 (select_stmt)
+
+
+State 38
+
+    2 command_wrapper: calc_stmt .
+
+    $default  reduce using rule 2 (command_wrapper)
+
+
+State 39
+
+   17 command_wrapper: load_data_stmt .
+
+    $default  reduce using rule 17 (command_wrapper)
+
+
+State 40
+
+   18 command_wrapper: explain_stmt .
+
+    $default  reduce using rule 18 (command_wrapper)
+
+
+State 41
+
+   19 command_wrapper: set_variable_stmt .
+
+    $default  reduce using rule 19 (command_wrapper)
+
+
+State 42
+
+   36 create_table_stmt: CREATE TABLE . ID LBRACE attr_def attr_def_list RBRACE
+
+    ID  shift, and go to state 83
+
+
+State 43
+
+   31 create_index_stmt: CREATE INDEX . ID ON ID LBRACE ID id_list RBRACE
+
+    ID  shift, and go to state 84
+
+
+State 44
+
+   32 create_index_stmt: CREATE UNIQUE . INDEX ID ON ID LBRACE ID id_list RBRACE
+
+    INDEX  shift, and go to state 85
+
+
+State 45
+
+   28 drop_table_stmt: DROP TABLE . ID
+
+    ID  shift, and go to state 86
+
+
+State 46
+
+   35 drop_index_stmt: DROP INDEX . ID ON ID
+
+    ID  shift, and go to state 87
+
+
+State 47
+
+   90 expression: LBRACE . expression RBRACE
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 88
+
+
+State 48
+
+   73 value: NULL_T .
+
+    $default  reduce using rule 73 (value)
+
+
+State 49
+
+   70 value: NUMBER .
+
+    $default  reduce using rule 70 (value)
+
+
+State 50
+
+   71 value: FLOAT .
+
+    $default  reduce using rule 71 (value)
+
+
+State 51
+
+   72 value: SSS .
+
+    $default  reduce using rule 72 (value)
+
+
+State 52
+
+   91 expression: '-' . expression
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 89
+
+
+State 53
+
+   92 expression: value .
+
+    $default  reduce using rule 92 (expression)
+
+
+State 54
+
+   83 calc_stmt: CALC expression_list .
+
+    $default  reduce using rule 83 (calc_stmt)
+
+
+State 55
+
+   84 expression_list: expression .
+   85                | expression . COMMA expression_list
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+
+    COMMA  shift, and go to state 90
+    '+'    shift, and go to state 91
+    '-'    shift, and go to state 92
+    '*'    shift, and go to state 93
+    '/'    shift, and go to state 94
+
+    $default  reduce using rule 84 (expression_list)
+
+
+State 56
+
+   57 aggr_type: MAX .
+
+    $default  reduce using rule 57 (aggr_type)
+
+
+State 57
+
+   58 aggr_type: MIN .
+
+    $default  reduce using rule 58 (aggr_type)
+
+
+State 58
+
+   59 aggr_type: AVG .
+
+    $default  reduce using rule 59 (aggr_type)
+
+
+State 59
+
+   60 aggr_type: SUM .
+
+    $default  reduce using rule 60 (aggr_type)
+
+
+State 60
+
+   61 aggr_type: COUNT .
+
+    $default  reduce using rule 61 (aggr_type)
+
+
+State 61
+
+   50 func_type: LENGTH .
+
+    $default  reduce using rule 50 (func_type)
+
+
+State 62
+
+   51 func_type: DATE_FORMAT .
+
+    $default  reduce using rule 51 (func_type)
+
+
+State 63
+
+   52 func_type: ROUND .
+
+    $default  reduce using rule 52 (func_type)
+
+
+State 64
+
+  100 rel_attr: ID . alias_optional
+  101         | ID . DOT ID alias_optional
+  102         | ID . DOT '*'
+
+    DOT  shift, and go to state 95
+    AS   shift, and go to state 96
+    ID   shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 98
+
+
+State 65
+
+   93 select_attr: '*' .
+
+    $default  reduce using rule 93 (select_attr)
+
+
+State 66
+
+   53 normal_func: func_type . LBRACE rel_attr RBRACE alias_optional
+   54            | func_type . LBRACE rel_attr COMMA value RBRACE alias_optional
+   55            | func_type . LBRACE value RBRACE alias_optional
+   56            | func_type . LBRACE value COMMA value RBRACE alias_optional
+
+    LBRACE  shift, and go to state 99
+
+
+State 67
+
+   96 select_attr: normal_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 101
+
+
+State 68
+
+   62 aggr_func: aggr_type . LBRACE ID RBRACE alias_optional
+   63          | aggr_type . LBRACE ID DOT ID RBRACE alias_optional
+   64          | aggr_type . LBRACE '*' RBRACE alias_optional
+
+    LBRACE  shift, and go to state 102
+
+
+State 69
+
+   95 select_attr: aggr_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 103
+
+
+State 70
+
+   81 select_body: SELECT select_attr . FROM ID alias_optional rel_list inner_join_list where group_by having order_by
+   82            | SELECT select_attr .
+
+    FROM  shift, and go to state 104
+
+    $default  reduce using rule 82 (select_body)
+
+
+State 71
+
+   94 select_attr: rel_attr . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 105
+
+
+State 72
+
+   30 desc_table_stmt: DESC ID .
+
+    $default  reduce using rule 30 (desc_table_stmt)
+
+
+State 73
+
+   29 show_tables_stmt: SHOW TABLES .
+
+    $default  reduce using rule 29 (show_tables_stmt)
+
+
+State 74
+
+   65 insert_stmt: INSERT INTO . ID VALUES LBRACE value value_list RBRACE insert_list
+
+    ID  shift, and go to state 106
+
+
+State 75
+
+   74 delete_stmt: DELETE FROM . ID where
+
+    ID  shift, and go to state 107
+
+
+State 76
+
+   75 update_stmt: UPDATE ID . SET update_pair update_list where
+
+    SET  shift, and go to state 108
+
+
+State 77
+
+  170 set_variable_stmt: SET ID . EQ value
+
+    EQ  shift, and go to state 109
+
+
+State 78
+
+  168 load_data_stmt: LOAD DATA . INFILE SSS INTO TABLE ID
+
+    INFILE  shift, and go to state 110
+
+
+State 79
+
+  169 explain_stmt: EXPLAIN command_wrapper .
+
+    $default  reduce using rule 169 (explain_stmt)
+
+
+State 80
+
+    0 $accept: commands $end .
+
+    $default  accept
+
+
+State 81
+
+  172 opt_semicolon: SEMICOLON .
+
+    $default  reduce using rule 172 (opt_semicolon)
+
+
+State 82
+
+    1 commands: command_wrapper opt_semicolon .
+
+    $default  reduce using rule 1 (commands)
+
+
+State 83
+
+   36 create_table_stmt: CREATE TABLE ID . LBRACE attr_def attr_def_list RBRACE
+
+    LBRACE  shift, and go to state 111
+
+
+State 84
+
+   31 create_index_stmt: CREATE INDEX ID . ON ID LBRACE ID id_list RBRACE
+
+    ON  shift, and go to state 112
+
+
+State 85
+
+   32 create_index_stmt: CREATE UNIQUE INDEX . ID ON ID LBRACE ID id_list RBRACE
+
+    ID  shift, and go to state 113
+
+
+State 86
+
+   28 drop_table_stmt: DROP TABLE ID .
+
+    $default  reduce using rule 28 (drop_table_stmt)
+
+
+State 87
+
+   35 drop_index_stmt: DROP INDEX ID . ON ID
+
+    ON  shift, and go to state 114
+
+
+State 88
+
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+   90           | LBRACE expression . RBRACE
+
+    RBRACE  shift, and go to state 115
+    '+'     shift, and go to state 91
+    '-'     shift, and go to state 92
+    '*'     shift, and go to state 93
+    '/'     shift, and go to state 94
+
+
+State 89
+
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+   91           | '-' expression .
+
+    $default  reduce using rule 91 (expression)
+
+
+State 90
+
+   85 expression_list: expression COMMA . expression_list
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value            go to state 53
+    expression_list  go to state 116
+    expression       go to state 55
+
+
+State 91
+
+   86 expression: expression '+' . expression
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 117
+
+
+State 92
+
+   87 expression: expression '-' . expression
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 118
+
+
+State 93
+
+   88 expression: expression '*' . expression
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 119
+
+
+State 94
+
+   89 expression: expression '/' . expression
+
+    LBRACE  shift, and go to state 47
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+    '-'     shift, and go to state 52
+
+    value       go to state 53
+    expression  go to state 120
+
+
+State 95
+
+  101 rel_attr: ID DOT . ID alias_optional
+  102         | ID DOT . '*'
+
+    ID   shift, and go to state 121
+    '*'  shift, and go to state 122
+
+
+State 96
+
+   99 alias_optional: AS . ID
+
+    ID  shift, and go to state 123
+
+
+State 97
+
+   98 alias_optional: ID .
+
+    $default  reduce using rule 98 (alias_optional)
+
+
+State 98
+
+  100 rel_attr: ID alias_optional .
+
+    $default  reduce using rule 100 (rel_attr)
+
+
+State 99
+
+   53 normal_func: func_type LBRACE . rel_attr RBRACE alias_optional
+   54            | func_type LBRACE . rel_attr COMMA value RBRACE alias_optional
+   55            | func_type LBRACE . value RBRACE alias_optional
+   56            | func_type LBRACE . value COMMA value RBRACE alias_optional
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    ID      shift, and go to state 64
+    SSS     shift, and go to state 51
+
+    value     go to state 124
+    rel_attr  go to state 125
+
+
+State 100
+
+  104 attr_list: COMMA . rel_attr attr_list
+  105          | COMMA . aggr_func attr_list
+  106          | COMMA . normal_func attr_list
+
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    ID           shift, and go to state 64
+
+    func_type    go to state 66
+    normal_func  go to state 126
+    aggr_type    go to state 68
+    aggr_func    go to state 127
+    rel_attr     go to state 128
+
+
+State 101
+
+   96 select_attr: normal_func attr_list .
+
+    $default  reduce using rule 96 (select_attr)
+
+
+State 102
+
+   62 aggr_func: aggr_type LBRACE . ID RBRACE alias_optional
+   63          | aggr_type LBRACE . ID DOT ID RBRACE alias_optional
+   64          | aggr_type LBRACE . '*' RBRACE alias_optional
+
+    ID   shift, and go to state 129
+    '*'  shift, and go to state 130
+
+
+State 103
+
+   95 select_attr: aggr_func attr_list .
+
+    $default  reduce using rule 95 (select_attr)
+
+
+State 104
+
+   81 select_body: SELECT select_attr FROM . ID alias_optional rel_list inner_join_list where group_by having order_by
+
+    ID  shift, and go to state 131
+
+
+State 105
+
+   94 select_attr: rel_attr attr_list .
+
+    $default  reduce using rule 94 (select_attr)
+
+
+State 106
+
+   65 insert_stmt: INSERT INTO ID . VALUES LBRACE value value_list RBRACE insert_list
+
+    VALUES  shift, and go to state 132
+
+
+State 107
+
+   74 delete_stmt: DELETE FROM ID . where
+
+    WHERE  shift, and go to state 133
+
+    $default  reduce using rule 117 (where)
+
+    where  go to state 134
+
+
+State 108
+
+   75 update_stmt: UPDATE ID SET . update_pair update_list where
+
+    ID  shift, and go to state 135
+
+    update_pair  go to state 136
+
+
+State 109
+
+  170 set_variable_stmt: SET ID EQ . value
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 137
+
+
+State 110
+
+  168 load_data_stmt: LOAD DATA INFILE . SSS INTO TABLE ID
+
+    SSS  shift, and go to state 138
+
+
+State 111
+
+   36 create_table_stmt: CREATE TABLE ID LBRACE . attr_def attr_def_list RBRACE
+
+    ID  shift, and go to state 139
+
+    attr_def  go to state 140
+
+
+State 112
+
+   31 create_index_stmt: CREATE INDEX ID ON . ID LBRACE ID id_list RBRACE
+
+    ID  shift, and go to state 141
+
+
+State 113
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID . ON ID LBRACE ID id_list RBRACE
+
+    ON  shift, and go to state 142
+
+
+State 114
+
+   35 drop_index_stmt: DROP INDEX ID ON . ID
+
+    ID  shift, and go to state 143
+
+
+State 115
+
+   90 expression: LBRACE expression RBRACE .
+
+    $default  reduce using rule 90 (expression)
+
+
+State 116
+
+   85 expression_list: expression COMMA expression_list .
+
+    $default  reduce using rule 85 (expression_list)
+
+
+State 117
+
+   86 expression: expression . '+' expression
+   86           | expression '+' expression .
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+
+    '*'  shift, and go to state 93
+    '/'  shift, and go to state 94
+
+    $default  reduce using rule 86 (expression)
+
+
+State 118
+
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   87           | expression '-' expression .
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+
+    '*'  shift, and go to state 93
+    '/'  shift, and go to state 94
+
+    $default  reduce using rule 87 (expression)
+
+
+State 119
+
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   88           | expression '*' expression .
+   89           | expression . '/' expression
+
+    $default  reduce using rule 88 (expression)
+
+
+State 120
+
+   86 expression: expression . '+' expression
+   87           | expression . '-' expression
+   88           | expression . '*' expression
+   89           | expression . '/' expression
+   89           | expression '/' expression .
+
+    $default  reduce using rule 89 (expression)
+
+
+State 121
+
+  101 rel_attr: ID DOT ID . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 144
+
+
+State 122
+
+  102 rel_attr: ID DOT '*' .
+
+    $default  reduce using rule 102 (rel_attr)
+
+
+State 123
+
+   99 alias_optional: AS ID .
+
+    $default  reduce using rule 99 (alias_optional)
+
+
+State 124
+
+   55 normal_func: func_type LBRACE value . RBRACE alias_optional
+   56            | func_type LBRACE value . COMMA value RBRACE alias_optional
+
+    RBRACE  shift, and go to state 145
+    COMMA   shift, and go to state 146
+
+
+State 125
+
+   53 normal_func: func_type LBRACE rel_attr . RBRACE alias_optional
+   54            | func_type LBRACE rel_attr . COMMA value RBRACE alias_optional
+
+    RBRACE  shift, and go to state 147
+    COMMA   shift, and go to state 148
+
+
+State 126
+
+  106 attr_list: COMMA normal_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 149
+
+
+State 127
+
+  105 attr_list: COMMA aggr_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 150
+
+
+State 128
+
+  104 attr_list: COMMA rel_attr . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 151
+
+
+State 129
+
+   62 aggr_func: aggr_type LBRACE ID . RBRACE alias_optional
+   63          | aggr_type LBRACE ID . DOT ID RBRACE alias_optional
+
+    RBRACE  shift, and go to state 152
+    DOT     shift, and go to state 153
+
+
+State 130
+
+   64 aggr_func: aggr_type LBRACE '*' . RBRACE alias_optional
+
+    RBRACE  shift, and go to state 154
+
+
+State 131
+
+   81 select_body: SELECT select_attr FROM ID . alias_optional rel_list inner_join_list where group_by having order_by
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 155
+
+
+State 132
+
+   65 insert_stmt: INSERT INTO ID VALUES . LBRACE value value_list RBRACE insert_list
+
+    LBRACE  shift, and go to state 156
+
+
+State 133
+
+  118 where: WHERE . condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 132 (condition_list)
+
+    func_type       go to state 66
+    normal_func     go to state 169
+    aggr_type       go to state 68
+    aggr_func       go to state 170
+    value           go to state 171
+    rel_attr        go to state 172
+    condition_list  go to state 173
+    condition       go to state 174
+    comp_op         go to state 175
+
+
+State 134
+
+   74 delete_stmt: DELETE FROM ID where .
+
+    $default  reduce using rule 74 (delete_stmt)
+
+
+State 135
+
+   76 update_pair: ID . EQ value
+   77            | ID . EQ LBRACE select_body RBRACE
+
+    EQ  shift, and go to state 176
+
+
+State 136
+
+   75 update_stmt: UPDATE ID SET update_pair . update_list where
+
+    COMMA  shift, and go to state 177
+
+    $default  reduce using rule 78 (update_list)
+
+    update_list  go to state 178
+
+
+State 137
+
+  170 set_variable_stmt: SET ID EQ value .
+
+    $default  reduce using rule 170 (set_variable_stmt)
+
+
+State 138
+
+  168 load_data_stmt: LOAD DATA INFILE SSS . INTO TABLE ID
+
+    INTO  shift, and go to state 179
+
+
+State 139
+
+   39 attr_def: ID . type LBRACE number RBRACE attr_null
+   40         | ID . TEXT_T attr_null
+   41         | ID . type attr_null
+
+    INT_T     shift, and go to state 180
+    STRING_T  shift, and go to state 181
+    FLOAT_T   shift, and go to state 182
+    DATE_T    shift, and go to state 183
+    TEXT_T    shift, and go to state 184
+
+    type  go to state 185
+
+
+State 140
+
+   36 create_table_stmt: CREATE TABLE ID LBRACE attr_def . attr_def_list RBRACE
+
+    COMMA  shift, and go to state 186
+
+    $default  reduce using rule 37 (attr_def_list)
+
+    attr_def_list  go to state 187
+
+
+State 141
+
+   31 create_index_stmt: CREATE INDEX ID ON ID . LBRACE ID id_list RBRACE
+
+    LBRACE  shift, and go to state 188
+
+
+State 142
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON . ID LBRACE ID id_list RBRACE
+
+    ID  shift, and go to state 189
+
+
+State 143
+
+   35 drop_index_stmt: DROP INDEX ID ON ID .
+
+    $default  reduce using rule 35 (drop_index_stmt)
+
+
+State 144
+
+  101 rel_attr: ID DOT ID alias_optional .
+
+    $default  reduce using rule 101 (rel_attr)
+
+
+State 145
+
+   55 normal_func: func_type LBRACE value RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 190
+
+
+State 146
+
+   56 normal_func: func_type LBRACE value COMMA . value RBRACE alias_optional
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 191
+
+
+State 147
+
+   53 normal_func: func_type LBRACE rel_attr RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 192
+
+
+State 148
+
+   54 normal_func: func_type LBRACE rel_attr COMMA . value RBRACE alias_optional
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 193
+
+
+State 149
+
+  106 attr_list: COMMA normal_func attr_list .
+
+    $default  reduce using rule 106 (attr_list)
+
+
+State 150
+
+  105 attr_list: COMMA aggr_func attr_list .
+
+    $default  reduce using rule 105 (attr_list)
+
+
+State 151
+
+  104 attr_list: COMMA rel_attr attr_list .
+
+    $default  reduce using rule 104 (attr_list)
+
+
+State 152
+
+   62 aggr_func: aggr_type LBRACE ID RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 194
+
+
+State 153
+
+   63 aggr_func: aggr_type LBRACE ID DOT . ID RBRACE alias_optional
+
+    ID  shift, and go to state 195
+
+
+State 154
+
+   64 aggr_func: aggr_type LBRACE '*' RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 196
+
+
+State 155
+
+   81 select_body: SELECT select_attr FROM ID alias_optional . rel_list inner_join_list where group_by having order_by
+
+    COMMA  shift, and go to state 197
+
+    $default  reduce using rule 107 (rel_list)
+
+    rel_list  go to state 198
+
+
+State 156
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE . value value_list RBRACE insert_list
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 199
+
+
+State 157
+
+  149 condition: LBRACE . select_body RBRACE comp_op rel_attr
+  150          | LBRACE . select_body RBRACE comp_op value
+  151          | LBRACE . select_body RBRACE comp_op LBRACE select_body RBRACE
+
+    SELECT  shift, and go to state 4
+
+    select_body  go to state 200
+
+
+State 158
+
+  154 comp_op: EQ .
+
+    $default  reduce using rule 154 (comp_op)
+
+
+State 159
+
+  155 comp_op: LT .
+
+    $default  reduce using rule 155 (comp_op)
+
+
+State 160
+
+  156 comp_op: GT .
+
+    $default  reduce using rule 156 (comp_op)
+
+
+State 161
+
+  157 comp_op: LE .
+
+    $default  reduce using rule 157 (comp_op)
+
+
+State 162
+
+  158 comp_op: GE .
+
+    $default  reduce using rule 158 (comp_op)
+
+
+State 163
+
+  159 comp_op: NE .
+
+    $default  reduce using rule 159 (comp_op)
+
+
+State 164
+
+  160 comp_op: LIKE .
+
+    $default  reduce using rule 160 (comp_op)
+
+
+State 165
+
+  161 comp_op: NOT . LIKE
+  165        | NOT . IN_T
+  167        | NOT . EXIST_T
+
+    LIKE     shift, and go to state 201
+    IN_T     shift, and go to state 202
+    EXIST_T  shift, and go to state 203
+
+
+State 166
+
+  162 comp_op: IS_T .
+  163        | IS_T . NOT
+
+    NOT  shift, and go to state 204
+
+    $default  reduce using rule 162 (comp_op)
+
+
+State 167
+
+  164 comp_op: IN_T .
+
+    $default  reduce using rule 164 (comp_op)
+
+
+State 168
+
+  166 comp_op: EXIST_T .
+
+    $default  reduce using rule 166 (comp_op)
+
+
+State 169
+
+  140 condition: normal_func . comp_op rel_attr
+  143          | normal_func . comp_op value
+  144          | normal_func . comp_op normal_func
+
+    EQ       shift, and go to state 158
+    LT       shift, and go to state 159
+    GT       shift, and go to state 160
+    LE       shift, and go to state 161
+    GE       shift, and go to state 162
+    NE       shift, and go to state 163
+    LIKE     shift, and go to state 164
+    NOT      shift, and go to state 165
+    IS_T     shift, and go to state 166
+    IN_T     shift, and go to state 167
+    EXIST_T  shift, and go to state 168
+
+    comp_op  go to state 205
+
+
+State 170
+
+  146 condition: aggr_func . comp_op value
+
+    EQ       shift, and go to state 158
+    LT       shift, and go to state 159
+    GT       shift, and go to state 160
+    LE       shift, and go to state 161
+    GE       shift, and go to state 162
+    NE       shift, and go to state 163
+    LIKE     shift, and go to state 164
+    NOT      shift, and go to state 165
+    IS_T     shift, and go to state 166
+    IN_T     shift, and go to state 167
+    EXIST_T  shift, and go to state 168
+
+    comp_op  go to state 206
+
+
+State 171
+
+  137 condition: value . comp_op value
+  139          | value . comp_op rel_attr
+  142          | value . comp_op normal_func
+  145          | value . comp_op aggr_func
+  147          | value . comp_op LBRACE select_body RBRACE
+
+    EQ       shift, and go to state 158
+    LT       shift, and go to state 159
+    GT       shift, and go to state 160
+    LE       shift, and go to state 161
+    GE       shift, and go to state 162
+    NE       shift, and go to state 163
+    LIKE     shift, and go to state 164
+    NOT      shift, and go to state 165
+    IS_T     shift, and go to state 166
+    IN_T     shift, and go to state 167
+    EXIST_T  shift, and go to state 168
+
+    comp_op  go to state 207
+
+
+State 172
+
+  136 condition: rel_attr . comp_op value
+  138          | rel_attr . comp_op rel_attr
+  141          | rel_attr . comp_op normal_func
+  148          | rel_attr . comp_op LBRACE select_body RBRACE
+  153          | rel_attr . comp_op LBRACE value value_list RBRACE
+
+    EQ       shift, and go to state 158
+    LT       shift, and go to state 159
+    GT       shift, and go to state 160
+    LE       shift, and go to state 161
+    GE       shift, and go to state 162
+    NE       shift, and go to state 163
+    LIKE     shift, and go to state 164
+    NOT      shift, and go to state 165
+    IS_T     shift, and go to state 166
+    IN_T     shift, and go to state 167
+    EXIST_T  shift, and go to state 168
+
+    comp_op  go to state 208
+
+
+State 173
+
+  118 where: WHERE condition_list .
+
+    $default  reduce using rule 118 (where)
+
+
+State 174
+
+  133 condition_list: condition .
+  134               | condition . AND condition_list
+  135               | condition . OR condition_list
+
+    AND  shift, and go to state 209
+    OR   shift, and go to state 210
+
+    $default  reduce using rule 133 (condition_list)
+
+
+State 175
+
+  152 condition: comp_op . LBRACE select_body RBRACE
+
+    LBRACE  shift, and go to state 211
+
+
+State 176
+
+   76 update_pair: ID EQ . value
+   77            | ID EQ . LBRACE select_body RBRACE
+
+    LBRACE  shift, and go to state 212
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 213
+
+
+State 177
+
+   79 update_list: COMMA . update_pair update_list
+
+    ID  shift, and go to state 135
+
+    update_pair  go to state 214
+
+
+State 178
+
+   75 update_stmt: UPDATE ID SET update_pair update_list . where
+
+    WHERE  shift, and go to state 133
+
+    $default  reduce using rule 117 (where)
+
+    where  go to state 215
+
+
+State 179
+
+  168 load_data_stmt: LOAD DATA INFILE SSS INTO . TABLE ID
+
+    TABLE  shift, and go to state 216
+
+
+State 180
+
+   46 type: INT_T .
+
+    $default  reduce using rule 46 (type)
+
+
+State 181
+
+   47 type: STRING_T .
+
+    $default  reduce using rule 47 (type)
+
+
+State 182
+
+   48 type: FLOAT_T .
+
+    $default  reduce using rule 48 (type)
+
+
+State 183
+
+   49 type: DATE_T .
+
+    $default  reduce using rule 49 (type)
+
+
+State 184
+
+   40 attr_def: ID TEXT_T . attr_null
+
+    NOT     shift, and go to state 217
+    NULL_T  shift, and go to state 218
+
+    $default  reduce using rule 42 (attr_null)
+
+    attr_null  go to state 219
+
+
+State 185
+
+   39 attr_def: ID type . LBRACE number RBRACE attr_null
+   41         | ID type . attr_null
+
+    LBRACE  shift, and go to state 220
+    NOT     shift, and go to state 217
+    NULL_T  shift, and go to state 218
+
+    $default  reduce using rule 42 (attr_null)
+
+    attr_null  go to state 221
+
+
+State 186
+
+   38 attr_def_list: COMMA . attr_def attr_def_list
+
+    ID  shift, and go to state 139
+
+    attr_def  go to state 222
+
+
+State 187
+
+   36 create_table_stmt: CREATE TABLE ID LBRACE attr_def attr_def_list . RBRACE
+
+    RBRACE  shift, and go to state 223
+
+
+State 188
+
+   31 create_index_stmt: CREATE INDEX ID ON ID LBRACE . ID id_list RBRACE
+
+    ID  shift, and go to state 224
+
+
+State 189
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON ID . LBRACE ID id_list RBRACE
+
+    LBRACE  shift, and go to state 225
+
+
+State 190
+
+   55 normal_func: func_type LBRACE value RBRACE alias_optional .
+
+    $default  reduce using rule 55 (normal_func)
+
+
+State 191
+
+   56 normal_func: func_type LBRACE value COMMA value . RBRACE alias_optional
+
+    RBRACE  shift, and go to state 226
+
+
+State 192
+
+   53 normal_func: func_type LBRACE rel_attr RBRACE alias_optional .
+
+    $default  reduce using rule 53 (normal_func)
+
+
+State 193
+
+   54 normal_func: func_type LBRACE rel_attr COMMA value . RBRACE alias_optional
+
+    RBRACE  shift, and go to state 227
+
+
+State 194
+
+   62 aggr_func: aggr_type LBRACE ID RBRACE alias_optional .
+
+    $default  reduce using rule 62 (aggr_func)
+
+
+State 195
+
+   63 aggr_func: aggr_type LBRACE ID DOT ID . RBRACE alias_optional
+
+    RBRACE  shift, and go to state 228
+
+
+State 196
+
+   64 aggr_func: aggr_type LBRACE '*' RBRACE alias_optional .
+
+    $default  reduce using rule 64 (aggr_func)
+
+
+State 197
+
+  108 rel_list: COMMA . ID alias_optional rel_list
+
+    ID  shift, and go to state 229
+
+
+State 198
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list . inner_join_list where group_by having order_by
+
+    INNER  shift, and go to state 230
+
+    $default  reduce using rule 125 (inner_join_list)
+
+    inner_join_list  go to state 231
+    inner_join       go to state 232
+
+
+State 199
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE value . value_list RBRACE insert_list
+
+    COMMA  shift, and go to state 233
+
+    $default  reduce using rule 68 (value_list)
+
+    value_list  go to state 234
+
+
+State 200
+
+  149 condition: LBRACE select_body . RBRACE comp_op rel_attr
+  150          | LBRACE select_body . RBRACE comp_op value
+  151          | LBRACE select_body . RBRACE comp_op LBRACE select_body RBRACE
+
+    RBRACE  shift, and go to state 235
+
+
+State 201
+
+  161 comp_op: NOT LIKE .
+
+    $default  reduce using rule 161 (comp_op)
+
+
+State 202
+
+  165 comp_op: NOT IN_T .
+
+    $default  reduce using rule 165 (comp_op)
+
+
+State 203
+
+  167 comp_op: NOT EXIST_T .
+
+    $default  reduce using rule 167 (comp_op)
+
+
+State 204
+
+  163 comp_op: IS_T NOT .
+
+    $default  reduce using rule 163 (comp_op)
+
+
+State 205
+
+  140 condition: normal_func comp_op . rel_attr
+  143          | normal_func comp_op . value
+  144          | normal_func comp_op . normal_func
+
+    NULL_T       shift, and go to state 48
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    func_type    go to state 66
+    normal_func  go to state 236
+    value        go to state 237
+    rel_attr     go to state 238
+
+
+State 206
+
+  146 condition: aggr_func comp_op . value
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 239
+
+
+State 207
+
+  137 condition: value comp_op . value
+  139          | value comp_op . rel_attr
+  142          | value comp_op . normal_func
+  145          | value comp_op . aggr_func
+  147          | value comp_op . LBRACE select_body RBRACE
+
+    LBRACE       shift, and go to state 240
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    NULL_T       shift, and go to state 48
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    func_type    go to state 66
+    normal_func  go to state 241
+    aggr_type    go to state 68
+    aggr_func    go to state 242
+    value        go to state 243
+    rel_attr     go to state 244
+
+
+State 208
+
+  136 condition: rel_attr comp_op . value
+  138          | rel_attr comp_op . rel_attr
+  141          | rel_attr comp_op . normal_func
+  148          | rel_attr comp_op . LBRACE select_body RBRACE
+  153          | rel_attr comp_op . LBRACE value value_list RBRACE
+
+    LBRACE       shift, and go to state 245
+    NULL_T       shift, and go to state 48
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    func_type    go to state 66
+    normal_func  go to state 246
+    value        go to state 247
+    rel_attr     go to state 248
+
+
+State 209
+
+  134 condition_list: condition AND . condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 132 (condition_list)
+
+    func_type       go to state 66
+    normal_func     go to state 169
+    aggr_type       go to state 68
+    aggr_func       go to state 170
+    value           go to state 171
+    rel_attr        go to state 172
+    condition_list  go to state 249
+    condition       go to state 174
+    comp_op         go to state 175
+
+
+State 210
+
+  135 condition_list: condition OR . condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 132 (condition_list)
+
+    func_type       go to state 66
+    normal_func     go to state 169
+    aggr_type       go to state 68
+    aggr_func       go to state 170
+    value           go to state 171
+    rel_attr        go to state 172
+    condition_list  go to state 250
+    condition       go to state 174
+    comp_op         go to state 175
+
+
+State 211
+
+  152 condition: comp_op LBRACE . select_body RBRACE
+
+    SELECT  shift, and go to state 4
+
+    select_body  go to state 251
+
+
+State 212
+
+   77 update_pair: ID EQ LBRACE . select_body RBRACE
+
+    SELECT  shift, and go to state 4
+
+    select_body  go to state 252
+
+
+State 213
+
+   76 update_pair: ID EQ value .
+
+    $default  reduce using rule 76 (update_pair)
+
+
+State 214
+
+   79 update_list: COMMA update_pair . update_list
+
+    COMMA  shift, and go to state 177
+
+    $default  reduce using rule 78 (update_list)
+
+    update_list  go to state 253
+
+
+State 215
+
+   75 update_stmt: UPDATE ID SET update_pair update_list where .
+
+    $default  reduce using rule 75 (update_stmt)
+
+
+State 216
+
+  168 load_data_stmt: LOAD DATA INFILE SSS INTO TABLE . ID
+
+    ID  shift, and go to state 254
+
+
+State 217
+
+   43 attr_null: NOT . NULL_T
+
+    NULL_T  shift, and go to state 255
+
+
+State 218
+
+   44 attr_null: NULL_T .
+
+    $default  reduce using rule 44 (attr_null)
+
+
+State 219
+
+   40 attr_def: ID TEXT_T attr_null .
+
+    $default  reduce using rule 40 (attr_def)
+
+
+State 220
+
+   39 attr_def: ID type LBRACE . number RBRACE attr_null
+
+    NUMBER  shift, and go to state 256
+
+    number  go to state 257
+
+
+State 221
+
+   41 attr_def: ID type attr_null .
+
+    $default  reduce using rule 41 (attr_def)
+
+
+State 222
+
+   38 attr_def_list: COMMA attr_def . attr_def_list
+
+    COMMA  shift, and go to state 186
+
+    $default  reduce using rule 37 (attr_def_list)
+
+    attr_def_list  go to state 258
+
+
+State 223
+
+   36 create_table_stmt: CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE .
+
+    $default  reduce using rule 36 (create_table_stmt)
+
+
+State 224
+
+   31 create_index_stmt: CREATE INDEX ID ON ID LBRACE ID . id_list RBRACE
+
+    COMMA  shift, and go to state 259
+
+    $default  reduce using rule 33 (id_list)
+
+    id_list  go to state 260
+
+
+State 225
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON ID LBRACE . ID id_list RBRACE
+
+    ID  shift, and go to state 261
+
+
+State 226
+
+   56 normal_func: func_type LBRACE value COMMA value RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 262
+
+
+State 227
+
+   54 normal_func: func_type LBRACE rel_attr COMMA value RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 263
+
+
+State 228
+
+   63 aggr_func: aggr_type LBRACE ID DOT ID RBRACE . alias_optional
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 264
+
+
+State 229
+
+  108 rel_list: COMMA ID . alias_optional rel_list
+
+    AS  shift, and go to state 96
+    ID  shift, and go to state 97
+
+    $default  reduce using rule 97 (alias_optional)
+
+    alias_optional  go to state 265
+
+
+State 230
+
+  127 inner_join: INNER . JOIN ID ON join_condition_list
+
+    JOIN  shift, and go to state 266
+
+
+State 231
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list . where group_by having order_by
+
+    WHERE  shift, and go to state 133
+
+    $default  reduce using rule 117 (where)
+
+    where  go to state 267
+
+
+State 232
+
+  126 inner_join_list: inner_join . inner_join_list
+
+    INNER  shift, and go to state 230
+
+    $default  reduce using rule 125 (inner_join_list)
+
+    inner_join_list  go to state 268
+    inner_join       go to state 232
+
+
+State 233
+
+   69 value_list: COMMA . value value_list
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 269
+
+
+State 234
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE value value_list . RBRACE insert_list
+
+    RBRACE  shift, and go to state 270
+
+
+State 235
+
+  149 condition: LBRACE select_body RBRACE . comp_op rel_attr
+  150          | LBRACE select_body RBRACE . comp_op value
+  151          | LBRACE select_body RBRACE . comp_op LBRACE select_body RBRACE
+
+    EQ       shift, and go to state 158
+    LT       shift, and go to state 159
+    GT       shift, and go to state 160
+    LE       shift, and go to state 161
+    GE       shift, and go to state 162
+    NE       shift, and go to state 163
+    LIKE     shift, and go to state 164
+    NOT      shift, and go to state 165
+    IS_T     shift, and go to state 166
+    IN_T     shift, and go to state 167
+    EXIST_T  shift, and go to state 168
+
+    comp_op  go to state 271
+
+
+State 236
+
+  144 condition: normal_func comp_op normal_func .
+
+    $default  reduce using rule 144 (condition)
+
+
+State 237
+
+  143 condition: normal_func comp_op value .
+
+    $default  reduce using rule 143 (condition)
+
+
+State 238
+
+  140 condition: normal_func comp_op rel_attr .
+
+    $default  reduce using rule 140 (condition)
+
+
+State 239
+
+  146 condition: aggr_func comp_op value .
+
+    $default  reduce using rule 146 (condition)
+
+
+State 240
+
+  147 condition: value comp_op LBRACE . select_body RBRACE
+
+    SELECT  shift, and go to state 4
+
+    select_body  go to state 272
+
+
+State 241
+
+  142 condition: value comp_op normal_func .
+
+    $default  reduce using rule 142 (condition)
+
+
+State 242
+
+  145 condition: value comp_op aggr_func .
+
+    $default  reduce using rule 145 (condition)
+
+
+State 243
+
+  137 condition: value comp_op value .
+
+    $default  reduce using rule 137 (condition)
+
+
+State 244
+
+  139 condition: value comp_op rel_attr .
+
+    $default  reduce using rule 139 (condition)
+
+
+State 245
+
+  148 condition: rel_attr comp_op LBRACE . select_body RBRACE
+  153          | rel_attr comp_op LBRACE . value value_list RBRACE
+
+    SELECT  shift, and go to state 4
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value        go to state 273
+    select_body  go to state 274
+
+
+State 246
+
+  141 condition: rel_attr comp_op normal_func .
+
+    $default  reduce using rule 141 (condition)
+
+
+State 247
+
+  136 condition: rel_attr comp_op value .
+
+    $default  reduce using rule 136 (condition)
+
+
+State 248
+
+  138 condition: rel_attr comp_op rel_attr .
+
+    $default  reduce using rule 138 (condition)
+
+
+State 249
+
+  134 condition_list: condition AND condition_list .
+
+    $default  reduce using rule 134 (condition_list)
+
+
+State 250
+
+  135 condition_list: condition OR condition_list .
+
+    $default  reduce using rule 135 (condition_list)
+
+
+State 251
+
+  152 condition: comp_op LBRACE select_body . RBRACE
+
+    RBRACE  shift, and go to state 275
+
+
+State 252
+
+   77 update_pair: ID EQ LBRACE select_body . RBRACE
+
+    RBRACE  shift, and go to state 276
+
+
+State 253
+
+   79 update_list: COMMA update_pair update_list .
+
+    $default  reduce using rule 79 (update_list)
+
+
+State 254
+
+  168 load_data_stmt: LOAD DATA INFILE SSS INTO TABLE ID .
+
+    $default  reduce using rule 168 (load_data_stmt)
+
+
+State 255
+
+   43 attr_null: NOT NULL_T .
+
+    $default  reduce using rule 43 (attr_null)
+
+
+State 256
+
+   45 number: NUMBER .
+
+    $default  reduce using rule 45 (number)
+
+
+State 257
+
+   39 attr_def: ID type LBRACE number . RBRACE attr_null
+
+    RBRACE  shift, and go to state 277
+
+
+State 258
+
+   38 attr_def_list: COMMA attr_def attr_def_list .
+
+    $default  reduce using rule 38 (attr_def_list)
+
+
+State 259
+
+   34 id_list: COMMA . ID id_list
+
+    ID  shift, and go to state 278
+
+
+State 260
+
+   31 create_index_stmt: CREATE INDEX ID ON ID LBRACE ID id_list . RBRACE
+
+    RBRACE  shift, and go to state 279
+
+
+State 261
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON ID LBRACE ID . id_list RBRACE
+
+    COMMA  shift, and go to state 259
+
+    $default  reduce using rule 33 (id_list)
+
+    id_list  go to state 280
+
+
+State 262
+
+   56 normal_func: func_type LBRACE value COMMA value RBRACE alias_optional .
+
+    $default  reduce using rule 56 (normal_func)
+
+
+State 263
+
+   54 normal_func: func_type LBRACE rel_attr COMMA value RBRACE alias_optional .
+
+    $default  reduce using rule 54 (normal_func)
+
+
+State 264
+
+   63 aggr_func: aggr_type LBRACE ID DOT ID RBRACE alias_optional .
+
+    $default  reduce using rule 63 (aggr_func)
+
+
+State 265
+
+  108 rel_list: COMMA ID alias_optional . rel_list
+
+    COMMA  shift, and go to state 197
+
+    $default  reduce using rule 107 (rel_list)
+
+    rel_list  go to state 281
+
+
+State 266
+
+  127 inner_join: INNER JOIN . ID ON join_condition_list
+
+    ID  shift, and go to state 282
+
+
+State 267
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where . group_by having order_by
+
+    GROUP  shift, and go to state 283
+
+    $default  reduce using rule 121 (group_by)
+
+    group_by  go to state 284
+
+
+State 268
+
+  126 inner_join_list: inner_join inner_join_list .
+
+    $default  reduce using rule 126 (inner_join_list)
+
+
+State 269
+
+   69 value_list: COMMA value . value_list
+
+    COMMA  shift, and go to state 233
+
+    $default  reduce using rule 68 (value_list)
+
+    value_list  go to state 285
+
+
+State 270
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE value value_list RBRACE . insert_list
+
+    COMMA  shift, and go to state 286
+
+    $default  reduce using rule 66 (insert_list)
+
+    insert_list  go to state 287
+
+
+State 271
+
+  149 condition: LBRACE select_body RBRACE comp_op . rel_attr
+  150          | LBRACE select_body RBRACE comp_op . value
+  151          | LBRACE select_body RBRACE comp_op . LBRACE select_body RBRACE
+
+    LBRACE  shift, and go to state 288
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    ID      shift, and go to state 64
+    SSS     shift, and go to state 51
+
+    value     go to state 289
+    rel_attr  go to state 290
+
+
+State 272
+
+  147 condition: value comp_op LBRACE select_body . RBRACE
+
+    RBRACE  shift, and go to state 291
+
+
+State 273
+
+  153 condition: rel_attr comp_op LBRACE value . value_list RBRACE
+
+    COMMA  shift, and go to state 233
+
+    $default  reduce using rule 68 (value_list)
+
+    value_list  go to state 292
+
+
+State 274
+
+  148 condition: rel_attr comp_op LBRACE select_body . RBRACE
+
+    RBRACE  shift, and go to state 293
+
+
+State 275
+
+  152 condition: comp_op LBRACE select_body RBRACE .
+
+    $default  reduce using rule 152 (condition)
+
+
+State 276
+
+   77 update_pair: ID EQ LBRACE select_body RBRACE .
+
+    $default  reduce using rule 77 (update_pair)
+
+
+State 277
+
+   39 attr_def: ID type LBRACE number RBRACE . attr_null
+
+    NOT     shift, and go to state 217
+    NULL_T  shift, and go to state 218
+
+    $default  reduce using rule 42 (attr_null)
+
+    attr_null  go to state 294
+
+
+State 278
+
+   34 id_list: COMMA ID . id_list
+
+    COMMA  shift, and go to state 259
+
+    $default  reduce using rule 33 (id_list)
+
+    id_list  go to state 295
+
+
+State 279
+
+   31 create_index_stmt: CREATE INDEX ID ON ID LBRACE ID id_list RBRACE .
+
+    $default  reduce using rule 31 (create_index_stmt)
+
+
+State 280
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON ID LBRACE ID id_list . RBRACE
+
+    RBRACE  shift, and go to state 296
+
+
+State 281
+
+  108 rel_list: COMMA ID alias_optional rel_list .
+
+    $default  reduce using rule 108 (rel_list)
+
+
+State 282
+
+  127 inner_join: INNER JOIN ID . ON join_condition_list
+
+    ON  shift, and go to state 297
+
+
+State 283
+
+  122 group_by: GROUP . BY rel_attr attr_list
+  123         | GROUP . BY aggr_func attr_list
+  124         | GROUP . BY normal_func attr_list
+
+    BY  shift, and go to state 298
+
+
+State 284
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by . having order_by
+
+    HAVING  shift, and go to state 299
+
+    $default  reduce using rule 119 (having)
+
+    having  go to state 300
+
+
+State 285
+
+   69 value_list: COMMA value value_list .
+
+    $default  reduce using rule 69 (value_list)
+
+
+State 286
+
+   67 insert_list: COMMA . LBRACE value value_list RBRACE insert_list
+
+    LBRACE  shift, and go to state 301
+
+
+State 287
+
+   65 insert_stmt: INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_list .
+
+    $default  reduce using rule 65 (insert_stmt)
+
+
+State 288
+
+  151 condition: LBRACE select_body RBRACE comp_op LBRACE . select_body RBRACE
+
+    SELECT  shift, and go to state 4
+
+    select_body  go to state 302
+
+
+State 289
+
+  150 condition: LBRACE select_body RBRACE comp_op value .
+
+    $default  reduce using rule 150 (condition)
+
+
+State 290
+
+  149 condition: LBRACE select_body RBRACE comp_op rel_attr .
+
+    $default  reduce using rule 149 (condition)
+
+
+State 291
+
+  147 condition: value comp_op LBRACE select_body RBRACE .
+
+    $default  reduce using rule 147 (condition)
+
+
+State 292
+
+  153 condition: rel_attr comp_op LBRACE value value_list . RBRACE
+
+    RBRACE  shift, and go to state 303
+
+
+State 293
+
+  148 condition: rel_attr comp_op LBRACE select_body RBRACE .
+
+    $default  reduce using rule 148 (condition)
+
+
+State 294
+
+   39 attr_def: ID type LBRACE number RBRACE attr_null .
+
+    $default  reduce using rule 39 (attr_def)
+
+
+State 295
+
+   34 id_list: COMMA ID id_list .
+
+    $default  reduce using rule 34 (id_list)
+
+
+State 296
+
+   32 create_index_stmt: CREATE UNIQUE INDEX ID ON ID LBRACE ID id_list RBRACE .
+
+    $default  reduce using rule 32 (create_index_stmt)
+
+
+State 297
+
+  127 inner_join: INNER JOIN ID ON . join_condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 129 (join_condition_list)
+
+    func_type            go to state 66
+    normal_func          go to state 169
+    aggr_type            go to state 68
+    aggr_func            go to state 170
+    value                go to state 171
+    rel_attr             go to state 172
+    join_condition       go to state 304
+    join_condition_list  go to state 305
+    condition            go to state 306
+    comp_op              go to state 175
+
+
+State 298
+
+  122 group_by: GROUP BY . rel_attr attr_list
+  123         | GROUP BY . aggr_func attr_list
+  124         | GROUP BY . normal_func attr_list
+
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    ID           shift, and go to state 64
+
+    func_type    go to state 66
+    normal_func  go to state 307
+    aggr_type    go to state 68
+    aggr_func    go to state 308
+    rel_attr     go to state 309
+
+
+State 299
+
+  120 having: HAVING . condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 132 (condition_list)
+
+    func_type       go to state 66
+    normal_func     go to state 169
+    aggr_type       go to state 68
+    aggr_func       go to state 170
+    value           go to state 171
+    rel_attr        go to state 172
+    condition_list  go to state 310
+    condition       go to state 174
+    comp_op         go to state 175
+
+
+State 300
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by having . order_by
+
+    ORDER  shift, and go to state 311
+
+    $default  reduce using rule 109 (order_by)
+
+    order_by  go to state 312
+
+
+State 301
+
+   67 insert_list: COMMA LBRACE . value value_list RBRACE insert_list
+
+    NULL_T  shift, and go to state 48
+    NUMBER  shift, and go to state 49
+    FLOAT   shift, and go to state 50
+    SSS     shift, and go to state 51
+
+    value  go to state 313
+
+
+State 302
+
+  151 condition: LBRACE select_body RBRACE comp_op LBRACE select_body . RBRACE
+
+    RBRACE  shift, and go to state 314
+
+
+State 303
+
+  153 condition: rel_attr comp_op LBRACE value value_list RBRACE .
+
+    $default  reduce using rule 153 (condition)
+
+
+State 304
+
+  130 join_condition_list: join_condition .
+  131                    | join_condition . AND join_condition_list
+
+    AND  shift, and go to state 315
+
+    $default  reduce using rule 130 (join_condition_list)
+
+
+State 305
+
+  127 inner_join: INNER JOIN ID ON join_condition_list .
+
+    $default  reduce using rule 127 (inner_join)
+
+
+State 306
+
+  128 join_condition: condition .
+
+    $default  reduce using rule 128 (join_condition)
+
+
+State 307
+
+  124 group_by: GROUP BY normal_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 316
+
+
+State 308
+
+  123 group_by: GROUP BY aggr_func . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 317
+
+
+State 309
+
+  122 group_by: GROUP BY rel_attr . attr_list
+
+    COMMA  shift, and go to state 100
+
+    $default  reduce using rule 103 (attr_list)
+
+    attr_list  go to state 318
+
+
+State 310
+
+  120 having: HAVING condition_list .
+
+    $default  reduce using rule 120 (having)
+
+
+State 311
+
+  110 order_by: ORDER . BY order_by_list
+
+    BY  shift, and go to state 319
+
+
+State 312
+
+   81 select_body: SELECT select_attr FROM ID alias_optional rel_list inner_join_list where group_by having order_by .
+
+    $default  reduce using rule 81 (select_body)
+
+
+State 313
+
+   67 insert_list: COMMA LBRACE value . value_list RBRACE insert_list
+
+    COMMA  shift, and go to state 233
+
+    $default  reduce using rule 68 (value_list)
+
+    value_list  go to state 320
+
+
+State 314
+
+  151 condition: LBRACE select_body RBRACE comp_op LBRACE select_body RBRACE .
+
+    $default  reduce using rule 151 (condition)
+
+
+State 315
+
+  131 join_condition_list: join_condition AND . join_condition_list
+
+    LBRACE       shift, and go to state 157
+    EQ           shift, and go to state 158
+    LT           shift, and go to state 159
+    GT           shift, and go to state 160
+    LE           shift, and go to state 161
+    GE           shift, and go to state 162
+    NE           shift, and go to state 163
+    MAX          shift, and go to state 56
+    MIN          shift, and go to state 57
+    AVG          shift, and go to state 58
+    SUM          shift, and go to state 59
+    COUNT        shift, and go to state 60
+    LIKE         shift, and go to state 164
+    NOT          shift, and go to state 165
+    NULL_T       shift, and go to state 48
+    IS_T         shift, and go to state 166
+    IN_T         shift, and go to state 167
+    EXIST_T      shift, and go to state 168
+    LENGTH       shift, and go to state 61
+    DATE_FORMAT  shift, and go to state 62
+    ROUND        shift, and go to state 63
+    NUMBER       shift, and go to state 49
+    FLOAT        shift, and go to state 50
+    ID           shift, and go to state 64
+    SSS          shift, and go to state 51
+
+    $default  reduce using rule 129 (join_condition_list)
+
+    func_type            go to state 66
+    normal_func          go to state 169
+    aggr_type            go to state 68
+    aggr_func            go to state 170
+    value                go to state 171
+    rel_attr             go to state 172
+    join_condition       go to state 304
+    join_condition_list  go to state 321
+    condition            go to state 306
+    comp_op              go to state 175
+
+
+State 316
+
+  124 group_by: GROUP BY normal_func attr_list .
+
+    $default  reduce using rule 124 (group_by)
+
+
+State 317
+
+  123 group_by: GROUP BY aggr_func attr_list .
+
+    $default  reduce using rule 123 (group_by)
+
+
+State 318
+
+  122 group_by: GROUP BY rel_attr attr_list .
+
+    $default  reduce using rule 122 (group_by)
+
+
+State 319
+
+  110 order_by: ORDER BY . order_by_list
+
+    ID  shift, and go to state 64
+
+    rel_attr       go to state 322
+    order_by_attr  go to state 323
+    order_by_list  go to state 324
+
+
+State 320
+
+   67 insert_list: COMMA LBRACE value value_list . RBRACE insert_list
+
+    RBRACE  shift, and go to state 325
+
+
+State 321
+
+  131 join_condition_list: join_condition AND join_condition_list .
+
+    $default  reduce using rule 131 (join_condition_list)
+
+
+State 322
+
+  114 order_by_attr: rel_attr . order_type
+
+    DESC  shift, and go to state 326
+    ASC   shift, and go to state 327
+
+    $default  reduce using rule 111 (order_type)
+
+    order_type  go to state 328
+
+
+State 323
+
+  115 order_by_list: order_by_attr .
+  116              | order_by_attr . COMMA order_by_list
+
+    COMMA  shift, and go to state 329
+
+    $default  reduce using rule 115 (order_by_list)
+
+
+State 324
+
+  110 order_by: ORDER BY order_by_list .
+
+    $default  reduce using rule 110 (order_by)
+
+
+State 325
+
+   67 insert_list: COMMA LBRACE value value_list RBRACE . insert_list
+
+    COMMA  shift, and go to state 286
+
+    $default  reduce using rule 66 (insert_list)
+
+    insert_list  go to state 330
+
+
+State 326
+
+  113 order_type: DESC .
+
+    $default  reduce using rule 113 (order_type)
+
+
+State 327
+
+  112 order_type: ASC .
+
+    $default  reduce using rule 112 (order_type)
+
+
+State 328
+
+  114 order_by_attr: rel_attr order_type .
+
+    $default  reduce using rule 114 (order_by_attr)
+
+
+State 329
+
+  116 order_by_list: order_by_attr COMMA . order_by_list
+
+    ID  shift, and go to state 64
+
+    rel_attr       go to state 322
+    order_by_attr  go to state 323
+    order_by_list  go to state 331
+
+
+State 330
+
+   67 insert_list: COMMA LBRACE value value_list RBRACE insert_list .
+
+    $default  reduce using rule 67 (insert_list)
+
+
+State 331
+
+  116 order_by_list: order_by_attr COMMA order_by_list .
+
+    $default  reduce using rule 116 (order_by_list)
