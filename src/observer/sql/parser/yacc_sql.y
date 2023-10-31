@@ -179,6 +179,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <condition>           condition
 %type <value>               value
 %type <value>               minus_value
+%type <value>               all_value
 %type <number>              number
 %type <comp>                comp_op
 %type <order_t>             order_type
@@ -528,7 +529,7 @@ normal_func:
       free($3);
     }
     |
-    func_type LBRACE rel_attr COMMA value RBRACE
+    func_type LBRACE rel_attr COMMA all_value RBRACE
     {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -547,10 +548,9 @@ normal_func:
 
       free($3);
       free($5);
-
     }
     |
-    func_type LBRACE value RBRACE
+    func_type LBRACE all_value RBRACE
     {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -569,7 +569,7 @@ normal_func:
 
     }
     |
-    func_type LBRACE value COMMA value RBRACE
+    func_type LBRACE all_value COMMA all_value RBRACE
     {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -587,7 +587,6 @@ normal_func:
 
       free($3);
       free($5);
-
     }
     ;
 
@@ -632,30 +631,7 @@ aggr_func:
     ;
 
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_list
-    {
-      $$ = new ParsedSqlNode(SCF_INSERT);
-      $$->insertion.relation_name = $3;
-      std::vector<Value> first_value;
-      if ($7 != nullptr) {
-        first_value.swap(*$7);
-      }
-      first_value.emplace_back(*$6);
-      std::reverse(first_value.begin(), first_value.end());
-
-      if ($9 != nullptr) {
-        $$->insertion.insert_values.swap(*$9);
-      }
-      $$->insertion.insert_values.emplace_back(std::move(first_value));
-      std::reverse($$->insertion.insert_values.begin(), $$->insertion.insert_values.end());
-
-      delete $6;
-      free($3);
-      delete $9;
-      delete $7;
-    }
-    |
-        INSERT INTO ID VALUES LBRACE minus_value value_list RBRACE insert_list
+    INSERT INTO ID VALUES LBRACE all_value value_list RBRACE insert_list
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
@@ -683,24 +659,7 @@ insert_list:
   {
     $$ = nullptr;
   }
-  | COMMA LBRACE minus_value value_list RBRACE insert_list
-  {
-    std::vector<Value> first_value;
-    if ($4 != nullptr) {
-      first_value.swap(*$4);
-    }
-    first_value.emplace_back(*$3);
-    std::reverse(first_value.begin(), first_value.end());
-
-    if ($6 != nullptr) {
-      $$ = $6;
-    } else {
-      $$ = new std::vector<std::vector<Value>>;
-    }
-    $$->emplace_back(std::move(first_value));
-    delete $6;
-  }
-  | COMMA LBRACE value value_list RBRACE insert_list
+  | COMMA LBRACE all_value value_list RBRACE insert_list
   {
     std::vector<Value> first_value;
     if ($4 != nullptr) {
@@ -724,16 +683,7 @@ value_list:
     {
       $$ = nullptr;
     }
-    | COMMA minus_value value_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<Value>;
-      }
-      $$->emplace_back(*$2);
-      delete $2;
-    }
-    | COMMA value value_list  {
+    | COMMA all_value value_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
@@ -743,6 +693,16 @@ value_list:
       delete $2;
     }
     ;
+all_value:
+    minus_value
+    {
+      $$ = $1;
+    }
+    |
+    value
+    {
+      $$ = $1;
+    }
 
 minus_value:     '-' NUMBER {
       $$ = new Value(0-(int)$2);
@@ -897,17 +857,6 @@ select_body:
       std::reverse($$->order_bys.begin(), $$->order_bys.end());
       free($4);
     }
-    /* | */
-    /* SELECT normal_func attr_list // for functions (and expression)
-    {
-      $$ = new SelectSqlNode;
-      if ($3 != nullptr) {
-        $$->attributes.swap(*$3);
-        delete $3;
-      }
-      $$->attributes.emplace_back(*$2);
-      free($2);
-    } */
     | SELECT expr_attr attr_list
     {
       $$ = new SelectSqlNode;
@@ -1006,33 +955,6 @@ select_attr:
       attr.is_expr = true;
       $$->emplace_back(attr);
     }
-    /* | rel_attr attr_list {
-      if ($2 != nullptr) {
-        $$ = $2;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$1);
-      delete $1;
-    } */
-    /* | aggr_func attr_list {
-      if ($2 != nullptr) {
-        $$ = $2;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$1);
-      delete $1;
-      }
-    | normal_func attr_list {
-      if ($2 != nullptr) {
-        $$ = $2;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$1);
-      delete $1;
-    } */
     | expr_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -1136,25 +1058,6 @@ attr_list:
     {
       $$ = nullptr;
     }
-    /* | COMMA aggr_func attr_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-
-      $$->emplace_back(*$2);
-      delete $2;
-    }
-    | COMMA normal_func attr_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$2);
-      delete $2;
-    } */
     | COMMA expr_attr attr_list {
       if ($3 != nullptr) {
         $$ = $3;

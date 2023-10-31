@@ -511,8 +511,15 @@ public:
   virtual ~FunctionExpr() = default;  // todo(ligch)
 
   FunctionExpr(const RelAttrSqlNode &attr_node)
-      : is_uncompleted_(true), function_type_(attr_node.func_type), tmp_alias_(attr_node.alias), alias_(attr_node.alias)
-  {}
+      : is_uncompleted_(true),
+        function_type_(attr_node.func_type),
+        tmp_first_func_arg_(attr_node.first_func_arg),
+        tmp_second_func_arg_(attr_node.second_func_arg),
+        tmp_alias_(attr_node.alias),
+        alias_(attr_node.alias)
+  {
+    val_.set_null();
+  }
 
   static RC create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
       std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,

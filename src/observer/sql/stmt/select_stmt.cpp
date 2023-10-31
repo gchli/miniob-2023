@@ -169,7 +169,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           LOG_WARN("complete aggregate expression failed");
           return rc;
         }
-        field_alias.emplace_back(aggregate_expr->get_tmp_alias());
+        field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(aggregate_expr);
         continue;
       }
@@ -182,7 +182,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           LOG_WARN("complete aggregate expression failed");
           return rc;
         }
-        field_alias.emplace_back(func_expr->get_tmp_alias());
+        field_alias.emplace_back(relation_attr.alias);
         query_exprs.emplace_back(func_expr);
         continue;
       }
@@ -246,7 +246,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
               }
               auto field_expr = make_shared<FieldExpr>(table, field_meta);
               field_expr->set_table_alias(relation_name.c_str());
-              field_alias.emplace_back(alias);
+              field_alias.emplace_back(relation_attr.alias);
               query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
             }
           }
@@ -266,7 +266,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           auto field_expr = make_shared<FieldExpr>(table, field_meta);
           field_expr->set_table_alias(table->name());
           query_exprs.emplace_back(field_expr);
-          field_alias.emplace_back(field_expr->get_tmp_alias());
+          field_alias.emplace_back(relation_attr.alias);
         }
         continue;
       }
