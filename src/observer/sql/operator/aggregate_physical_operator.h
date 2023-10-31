@@ -122,5 +122,5 @@ private:
   shared_ptr<FilterStmt>                                            having_stmt_{nullptr};
   std::vector<shared_ptr<Expression>>                               having_exprs_;
 
-  shared_ptr<ProjectTuple> proj_tuple_;  // for expression
+  shared_ptr<ProjectTuple> proj_tuple_{nullptr};  // for expression
 };

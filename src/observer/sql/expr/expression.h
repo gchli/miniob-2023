@@ -433,10 +433,6 @@ public:
   {  // todo set alias and name;
     val_.set_null();
   }
-  AggregateExpr(AggrType type, shared_ptr<Expression> expr) : aggregate_type_(type), expr_(expr)
-  {  // todo set alias and name;
-    val_.set_null();
-  }
   AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta)
       : aggregate_type_(type), field_(table, field_meta)
   {}
@@ -485,19 +481,16 @@ public:
   const std::string &get_tmp_alias() const { return tmp_alias_; }
   static RC complete_aggregate_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, AggregateExpr *expr);
-  const shared_ptr<Expression> &get_expr() const { return expr_; }
-  void                          set_expr(shared_ptr<Expression> &expr) { expr_ = expr; }
 
 private:
-  AggrType               aggregate_type_;
-  FieldExpr              field_;
-  std::string            alias_;
-  shared_ptr<Expression> expr_{nullptr};
-  bool                   is_uncompleted_{false};
-  std::string            tmp_attribute_name_{""};
-  std::string            tmp_relation_name_{""};
-  std::string            tmp_alias_{""};
-  Value                  val_;
+  AggrType    aggregate_type_;
+  FieldExpr   field_;
+  std::string alias_;
+  bool        is_uncompleted_{false};
+  std::string tmp_attribute_name_{""};
+  std::string tmp_relation_name_{""};
+  std::string tmp_alias_{""};
+  Value       val_;
 };
 
 class FunctionExpr : public Expression

@@ -308,7 +308,7 @@ RC AggregatePhysicalOperator::open(Trx *trx)
 
     shared_ptr<Tuple> expr_tuple = make_shared<ExpressionTuple>(*aggr_exprs_output);
 
-    if (having_stmt_ != nullptr) {
+    if (having_stmt_) {
       shared_ptr<Tuple> tmp_expr_tuple = make_shared<ExpressionTuple>(*tmp_exprs_output);
       if (is_tuple_valid(*tmp_expr_tuple, having_stmt_)) {
         result_tuples_.emplace_back(std::move(expr_tuple));
@@ -349,7 +349,7 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
         TupleCellSpec tuple_spec(aggr_expr->name(true).c_str());
         tuple.find_cell(tuple_spec, left_value);
       } else {
-        LOG_WARN("shouldn't have other expr type in filter obj now");
+        LOG_WARN("shouldn't have other expr type in having filter obj now");
       }
     } else if (left_filer_obj.is_attr()) {
       // if (left_filer_obj.)
