@@ -37,8 +37,8 @@ enum AggrType
   SUM_T,
   COUNT_T,
   ARITHMETIC_T,
+  FUNC_T,
   FIELD_T,
-
 };
 
 enum FuncType

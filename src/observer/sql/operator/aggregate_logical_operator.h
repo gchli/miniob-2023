@@ -40,13 +40,7 @@ public:
   void                   set_having(FilterStmt *havings) { having_stmt_ = shared_ptr<FilterStmt>(havings); }
   shared_ptr<FilterStmt> get_having() const { return having_stmt_; }
   void set_having_exprs(std::vector<shared_ptr<Expression>> &having_exprs) { having_exprs_.swap(having_exprs); }
-  void set_other_aggr_exprs(std::vector<shared_ptr<Expression>> &other_aggr_exprs)
-  {
-    other_aggr_exprs_.swap(other_aggr_exprs);
-  }
-
   std::vector<shared_ptr<Expression>> &get_having_exprs() { return having_exprs_; }
-  std::vector<shared_ptr<Expression>> &get_other_aggr_exprs() { return other_aggr_exprs_; }
   const std::vector<std::string>      &field_alias() const { return field_alias_; }
 
 private:
@@ -56,6 +50,5 @@ private:
   std::vector<shared_ptr<Expression>> group_by_exprs_;
   shared_ptr<FilterStmt>              having_stmt_{nullptr};
   std::vector<shared_ptr<Expression>> having_exprs_;
-  std::vector<shared_ptr<Expression>> other_aggr_exprs_;
   std::vector<std::string>            field_alias_;
 };

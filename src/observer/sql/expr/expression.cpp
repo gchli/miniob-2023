@@ -1032,10 +1032,11 @@ RC ArithmeticExpr::collect_fields_from_arithmetic_expr(
     if (left_expr_type == ExprType::FIELD || left_expr_type == ExprType::AGGREGATE ||
         left_expr_type == ExprType::FUNCTION) {
       // auto left_field_expr = dynamic_cast<FieldExpr *>(expr->left().get());
-      if (0 == strcmp(table_name, expr->table_name())) {
-        const auto &field = expr->get_field();
+      const auto &left_expr = expr->left();
+      if (0 == strcmp(table_name, left_expr->table_name())) {
+        const auto &field = left_expr->get_field();
         if (field.table() != nullptr && field.meta() != nullptr) {
-          fields.emplace_back(expr->get_field());
+          fields.emplace_back(left_expr->get_field());
         }
       }
     }
@@ -1045,11 +1046,12 @@ RC ArithmeticExpr::collect_fields_from_arithmetic_expr(
     auto right_expr_type = expr->right()->type();
     if (right_expr_type == ExprType::FIELD || right_expr_type == ExprType::AGGREGATE ||
         right_expr_type == ExprType::FUNCTION) {
+      const auto &right_expr = expr->right();
       // auto right_field_expr = dynamic_cast<FieldExpr *>(expr->right().get());
-      if (0 == strcmp(table_name, expr->table_name())) {
-        const auto &field = expr->get_field();
+      if (0 == strcmp(table_name, right_expr->table_name())) {
+        const auto &field = right_expr->get_field();
         if (field.table() != nullptr && field.meta() != nullptr) {
-          fields.emplace_back(expr->get_field());
+          fields.emplace_back(right_expr->get_field());
         }
       }
     }

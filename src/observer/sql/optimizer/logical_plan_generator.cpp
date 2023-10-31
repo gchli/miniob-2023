@@ -267,9 +267,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       aggr_oper->set_having(select_stmt->having_stmt());
       aggr_oper->set_having_exprs(select_stmt->having_exprs());
     }
-    if (!aggr_exprs_in_arithmetic.empty()) {
-      aggr_oper->set_having_exprs(aggr_exprs_in_arithmetic);
-    }
     select_oper = std::move(aggr_oper);
   }
 
