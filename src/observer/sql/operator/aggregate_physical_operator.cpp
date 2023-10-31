@@ -155,6 +155,9 @@ RC AggregatePhysicalOperator::open(Trx *trx)
   // todo(ligch): 目前应该只有aggr_exprs, 之后需要扩展
   std::vector<shared_ptr<AggregateExpr>> aggr_exprs;
   std::vector<shared_ptr<AggregateExpr>> having_aggr_exprs;
+  std::vector<shared_ptr<AggregateExpr>> other_aggr_exprs;
+
+  std::vector<shared_ptr<ArithmeticExpr>> query_arithmetic_exprs;
   // std::vector<shared_ptr<FieldExpr>>     field_exprs;
   for (const auto &expr : aggr_exprs_) {
     if (expr->type() == ExprType::AGGREGATE) {
@@ -163,11 +166,24 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       shared_ptr<AggregateExpr> converted_field_expr =
           make_shared<AggregateExpr>(FIELD_T, *dynamic_pointer_cast<FieldExpr>(expr));
       aggr_exprs.push_back(converted_field_expr);
+    } else if (expr->type() == ExprType::ARITHMETIC) {
+      shared_ptr<AggregateExpr> converted_arithmetic_expr =
+          make_shared<AggregateExpr>(FIELD_T, *dynamic_pointer_cast<FieldExpr>(expr));
+      // aggr_exprs.push_back(converted_field_expr);
     }
   }
+
   for (const auto &expr : having_exprs_) {
     if (expr->type() == ExprType::AGGREGATE) {
       having_aggr_exprs.push_back(dynamic_pointer_cast<AggregateExpr>(expr));
+    } else if (expr->type() == ExprType::FIELD) {
+      LOG_ERROR("shouldn't happen.");
+    }
+  }
+
+  for (const auto &expr : other_aggr_exprs_) {
+    if (expr->type() == ExprType::AGGREGATE) {
+      other_aggr_exprs.push_back(dynamic_pointer_cast<AggregateExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
       LOG_ERROR("shouldn't happen.");
     }
@@ -241,6 +257,11 @@ RC AggregatePhysicalOperator::open(Trx *trx)
           group_by_tables_[proj_tuple].add_expr(expr);
         }
       }
+      if (!other_aggr_exprs_.empty()) {
+        for (const auto &expr : other_aggr_exprs) {
+          group_by_tables_[proj_tuple].add_expr(expr);
+        }
+      }
     }
     if (group_by_tables_.find(proj_tuple) == group_by_tables_.end()) {
       LOG_WARN("shouldn't happen.");
@@ -277,9 +298,16 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       tmp_expr_output->set_value(val);
       tmp_exprs_output->push_back(std::move(tmp_expr_output));
     }
+
+    for (const auto &expr : other_aggr_exprs) {
+      Value val             = cur_aggr_table.get_result(expr);
+      auto  tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      tmp_expr_output->set_value(val);
+      tmp_exprs_output->push_back(std::move(tmp_expr_output));
+    }
     shared_ptr<Tuple> expr_tuple = make_shared<ExpressionTuple>(*aggr_exprs_output);
 
-    if (having_stmt_) {
+    if (having_stmt_ || !other_aggr_exprs_.empty()) {
       shared_ptr<Tuple> tmp_expr_tuple = make_shared<ExpressionTuple>(*tmp_exprs_output);
       // if (is_tuple_valid(*expr_tuple, having_stmt_)) {
       if (is_tuple_valid(*tmp_expr_tuple, having_stmt_)) {

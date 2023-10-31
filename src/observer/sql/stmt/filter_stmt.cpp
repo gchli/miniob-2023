@@ -303,16 +303,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     filter_unit->set_left(filter_obj);
   } else if (condition.left_is_attr) {
 
-    if (condition.left_attr.is_func) {
-      shared_ptr<FunctionExpr> func_expr{nullptr};
-      RC rc = FunctionExpr::create_func_expr(db, condition.left_attr, default_table, tables, tables_alias, func_expr);
-      if (rc != RC::SUCCESS) {
-        return rc;
-      }
-      FilterObj filter_obj;
-      filter_obj.init_expr(func_expr);
-      filter_unit->set_left(filter_obj);
-    } else if (condition.left_attr.is_expr) {
+    if (condition.left_attr.is_expr) {
       // expr
       auto left_expr = condition.left_attr.expr;
       if (left_expr->type() == ExprType::ARITHMETIC) {
@@ -324,6 +315,25 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         }
         FilterObj filter_obj;
         filter_obj.init_expr(shared_ptr<ArithmeticExpr>(left_arithmetic_expr));
+        filter_unit->set_left(filter_obj);
+      } else if (left_expr->type() == ExprType::FUNCTION) {
+        // shared_ptr<FunctionExpr> func_expr{nullptr};
+        auto left_func_expr = dynamic_cast<FunctionExpr *>(left_expr);
+        RC   rc = FunctionExpr::complete_function_expr(db, default_table, tables, tables_alias, left_func_expr);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<FunctionExpr>(left_func_expr));
+        filter_unit->set_left(filter_obj);
+      } else if (left_expr->type() == ExprType::AGGREGATE) {
+        auto left_aggr_expr = dynamic_cast<AggregateExpr *>(left_expr);
+        RC   rc = AggregateExpr::complete_aggregate_expr(db, default_table, tables, tables_alias, left_aggr_expr);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<AggregateExpr>(left_aggr_expr));
         filter_unit->set_left(filter_obj);
       } else if (left_expr->type() == ExprType::FIELD) {
         Table           *table           = nullptr;
@@ -360,7 +370,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         filter_unit->set_left(filter_obj);
       }
     } else {
-      // aggr or attr
+      // attr
       Table           *table    = nullptr;
       const FieldMeta *field    = nullptr;
       bool             from_ctx = false;
@@ -368,11 +378,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
           db, default_table, tables, tables_alias, condition.left_attr, table, field, find_ctx, from_ctx);
 
       if (rc != RC::SUCCESS) {
-        if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
-          table = default_table;
-          field = new FieldMeta("*");
-          rc    = RC::SUCCESS;
-        }
         if (table == nullptr || field == nullptr) {
           LOG_WARN("cannot find attr");
           return rc;
@@ -383,9 +388,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       if (from_ctx) {
         // 当前查询的Attr来自于父查询的表
         filter_obj.init_father_attr(Field(table, field));
-      } else if (condition.left_attr.is_aggr) {
-        AggrType aggr_type = condition.left_attr.aggr_type;
-        filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
       } else {
         filter_obj.init_attr(Field(table, field));
       }
@@ -435,19 +437,10 @@ right:
     filter_unit->set_right(filter_obj);
   } else if (condition.right_is_attr) {
 
-    if (condition.right_attr.is_func) {
-      // func
-      shared_ptr<FunctionExpr> func_expr{nullptr};
-      RC rc = FunctionExpr::create_func_expr(db, condition.right_attr, default_table, tables, tables_alias, func_expr);
-      if (rc != RC::SUCCESS) {
-        return rc;
-      }
-      FilterObj filter_obj;
-      filter_obj.init_expr(func_expr);
-      filter_unit->set_right(filter_obj);
-    } else if (condition.right_attr.is_expr) {
+    if (condition.right_attr.is_expr) {
       // expr
       auto right_expr = condition.right_attr.expr;
+
       if (right_expr->type() == ExprType::ARITHMETIC) {
         auto right_arithmetic_expr = dynamic_cast<ArithmeticExpr *>(right_expr);
         RC   rc =
@@ -458,6 +451,25 @@ right:
         }
         FilterObj filter_obj;
         filter_obj.init_expr(shared_ptr<ArithmeticExpr>(right_arithmetic_expr));
+        filter_unit->set_right(filter_obj);
+      } else if (right_expr->type() == ExprType::FUNCTION) {
+        // shared_ptr<FunctionExpr> func_expr{nullptr};
+        auto right_func_expr = dynamic_cast<FunctionExpr *>(right_expr);
+        RC   rc = FunctionExpr::complete_function_expr(db, default_table, tables, tables_alias, right_func_expr);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<FunctionExpr>(right_func_expr));
+        filter_unit->set_right(filter_obj);
+      } else if (right_expr->type() == ExprType::AGGREGATE) {
+        auto right_aggr_expr = dynamic_cast<AggregateExpr *>(right_expr);
+        RC   rc = AggregateExpr::complete_aggregate_expr(db, default_table, tables, tables_alias, right_aggr_expr);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<AggregateExpr>(right_aggr_expr));
         filter_unit->set_right(filter_obj);
       } else if (right_expr->type() == ExprType::FIELD) {
         Table           *table            = nullptr;
@@ -494,11 +506,6 @@ right:
       rc                        = get_table_and_field(
           db, default_table, tables, tables_alias, condition.right_attr, table, field, find_ctx, from_ctx);
       if (rc != RC::SUCCESS) {
-        if (condition.left_attr.is_aggr && condition.left_attr.aggr_type == COUNT_T) {
-          table = default_table;
-          field = new FieldMeta("*");
-          rc    = RC::SUCCESS;
-        }
         if (table == nullptr || field == nullptr) {
           LOG_WARN("cannot find attr");
           return rc;
@@ -507,9 +514,6 @@ right:
       FilterObj filter_obj;
       if (from_ctx) {
         filter_obj.init_father_attr(Field(table, field));
-      } else if (condition.left_attr.is_aggr) {
-        AggrType aggr_type = condition.left_attr.aggr_type;
-        filter_obj.init_expr(make_shared<AggregateExpr>(aggr_type, table, field));
       } else {
         filter_obj.init_attr(Field(table, field));
       }

@@ -36,7 +36,9 @@ enum AggrType
   AVG_T,
   SUM_T,
   COUNT_T,
+  ARITHMETIC_T,
   FIELD_T,
+
 };
 
 enum FuncType
@@ -271,12 +273,12 @@ struct CreateTableSqlNode
 };
 
 /**
-  * @brief 描述一个create view语句
-  * @ingroup SQLParser
-  */
+ * @brief 描述一个create view语句
+ * @ingroup SQLParser
+ */
 struct CreateViewSqlNode
 {
-  std::string view_name;
+  std::string    view_name;
   SelectSqlNode *select;
 };
 

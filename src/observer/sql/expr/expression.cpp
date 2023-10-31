@@ -474,6 +474,71 @@ RC AggregateExpr::try_get_value(Value &value) const
   return RC::SUCCESS;
 }
 
+RC AggregateExpr::complete_aggregate_expr(Db *db, Table *default_table,
+    std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+    AggregateExpr *expr)
+{
+  AggrType         aggr_type  = expr->aggregate_type();
+  const char      *table_name = expr->get_tmp_relation_name().c_str();
+  const char      *field_name = expr->get_tmp_attribute_name().c_str();
+  const char      *alias      = expr->get_tmp_alias().c_str();
+  Table           *table{nullptr};
+  const FieldMeta *field_meta{nullptr};
+  if (!common::is_blank(table_name)) {
+    auto iter = tables->find(table_name);
+    if (iter == tables->end()) {
+      if (tables_alias->find(string(table_name)) == tables_alias->end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      auto table_real_name = tables_alias->at(table_name);
+      if (tables->find(table_real_name) == tables->end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      iter = tables->find(table_real_name);
+    }
+
+    table      = iter->second;
+    field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      if ((0 == strcmp(field_name, "*"))) {
+        field_meta = new FieldMeta("*");
+      } else {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+
+  } else if (0 == strcmp(field_name, "*") && aggr_type == COUNT_T) {
+    // select count(*)
+    table      = new Table();
+    field_meta = new FieldMeta("*");
+
+  } else {
+    if (tables->size() != 1) {
+      LOG_WARN("invalid. I do not know the attr's table. attr=%s", field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+
+    table      = default_table;
+    field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      if ((0 == strcmp(field_name, "*"))) {
+        field_meta = new FieldMeta("*");
+      } else {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+  }
+  if (table == nullptr || field_meta == nullptr) {
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+  expr->set_field_expr(table, field_meta);
+  return RC::SUCCESS;
+}
+
 FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, std::string alias)
     : function_type_(type), first_obj_expr_(first_obj_expr), alias_(alias)
 {
@@ -609,6 +674,108 @@ std::string FunctionExpr::name(bool with_table) const
   // std::transform(ret.begin(), ret.end(), ret.begin(), [](char const &c) { return std::toupper(c); });
   return ret;
 }
+
+RC FunctionExpr::complete_function_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+    std::unordered_map<std::string, std::string> *tables_alias, FunctionExpr *expr)
+{
+  FuncType    func_type       = expr->function_type();
+  const auto &first_func_arg  = expr->get_tmp_first_func_arg();
+  const auto &second_func_arg = expr->get_tmp_second_func_arg();
+  const auto &alias           = expr->get_tmp_alias();
+  if (second_func_arg.is_valid) {
+    if (second_func_arg.is_attr) {
+      // round(a, b), date_format(a, b), b can only be values.
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == LENGTH_T) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == DATE_FORMAT_T && second_func_arg.value.attr_type() != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == ROUND_T && second_func_arg.value.attr_type() != INTS) {
+      return RC::INVALID_ARGUMENT;
+    }
+  }
+  auto check_func_attr_type = [](FuncType func_type, AttrType attr_type) {
+    if (func_type == LENGTH_T && attr_type != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == DATE_FORMAT_T && attr_type != DATES &&
+        attr_type != CHARS) {  // todo: maybe chars can also be allowed
+      return RC::INVALID_ARGUMENT;
+    }
+    if (func_type == ROUND_T && attr_type != INTS && attr_type != FLOATS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    return RC::SUCCESS;
+  };
+  shared_ptr<Expression> obj_expr{nullptr};
+  if (first_func_arg.is_attr) {
+    const char      *table_name = first_func_arg.relation_name.c_str();
+    const char      *field_name = first_func_arg.attribute_name.c_str();
+    Table           *table      = nullptr;
+    const FieldMeta *field_meta = nullptr;
+
+    if (!common::is_blank(table_name)) {
+      auto iter = tables->find(table_name);
+      if (iter == tables->end()) {
+        if (tables_alias->find(string(table_name)) == tables_alias->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        auto table_real_name = tables_alias->find(table_name)->second;
+        if (tables->find(table_real_name) == tables->end()) {
+          LOG_WARN("no such table in from list: %s", table_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        iter = tables->find(table_real_name);
+      }
+      table      = iter->second;
+      field_meta = table->table_meta().field(field_name);
+    } else {
+      if (tables->size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      table      = default_table;
+      field_meta = table->table_meta().field(field_name);
+    }
+
+    field_meta = table->table_meta().field(field_name);
+    if (field_meta == nullptr) {
+      // todo(ligch): figure out whether the "*" can appear in function
+      if ((0 == strcmp(field_name, "*"))) {
+        field_meta = new FieldMeta("*");
+      } else {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+    RC rc = check_func_attr_type(func_type, field_meta->type());
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+
+    obj_expr = make_shared<FieldExpr>(table, field_meta);
+  } else {
+    RC rc = check_func_attr_type(func_type, first_func_arg.value.attr_type());
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    obj_expr = make_shared<ValueExpr>(first_func_arg.value);
+  }
+
+  shared_ptr<Expression> second_obj_expr{nullptr};
+  expr->set_first_expr(obj_expr);
+  if (second_func_arg.is_valid) {
+    second_obj_expr = make_shared<ValueExpr>(second_func_arg.value);
+    expr->set_second_expr(second_obj_expr);
+  }
+
+  return RC::SUCCESS;
+}
+
 RC FunctionExpr::create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
     std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
     shared_ptr<FunctionExpr> &func_expr)
@@ -730,6 +897,7 @@ RC ArithmeticExpr::complete_arithmetic_expr(Db *db, Table *default_table,
       return rc;
     }
   }
+
   if (right_expr != nullptr && right_expr->type() == ExprType::ARITHMETIC) {
     auto right_arith_expr = dynamic_cast<ArithmeticExpr *>(right_expr.get());
     RC   rc               = complete_arithmetic_expr(db, default_table, tables, tables_alias, right_arith_expr);
@@ -780,21 +948,57 @@ RC ArithmeticExpr::complete_arithmetic_expr(Db *db, Table *default_table,
     return RC::SUCCESS;
   };
 
-  if (left_expr != nullptr && left_expr->type() == ExprType::FIELD) {
-    auto left_field_expr = dynamic_cast<FieldExpr *>(left_expr.get());
-    RC   rc              = complete_field_expr(left_field_expr);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("complete left field expr for arithmetic expr failed.");
-      return rc;
+  if (left_expr != nullptr && left_expr->type() != ExprType::ARITHMETIC) {
+    if (left_expr->type() == ExprType::FIELD) {
+      auto left_field_expr = dynamic_cast<FieldExpr *>(left_expr.get());
+      RC   rc              = complete_field_expr(left_field_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete left field expr for arithmetic expr failed.");
+        return rc;
+      }
+    }
+    if (left_expr->type() == ExprType::AGGREGATE) {
+      auto left_aggr_expr = dynamic_cast<AggregateExpr *>(left_expr.get());
+      RC   rc = AggregateExpr::complete_aggregate_expr(db, default_table, tables, tables_alias, left_aggr_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete left field expr for arithmetic expr failed.");
+        return rc;
+      }
+    }
+    if (left_expr->type() == ExprType::FUNCTION) {
+      auto left_func_expr = dynamic_cast<FunctionExpr *>(left_expr.get());
+      RC   rc = FunctionExpr::complete_function_expr(db, default_table, tables, tables_alias, left_func_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete left field expr for arithmetic expr failed.");
+        return rc;
+      }
     }
   }
 
-  if (right_expr != nullptr && right_expr->type() == ExprType::FIELD) {
-    auto right_field_expr = dynamic_cast<FieldExpr *>(right_expr.get());
-    RC   rc               = complete_field_expr(right_field_expr);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("complete right field expr for arithmetic expr failed.");
-      return rc;
+  if (right_expr != nullptr && right_expr->type() != ExprType::ARITHMETIC) {
+    if (right_expr->type() == ExprType::FIELD) {
+      auto right_field_expr = dynamic_cast<FieldExpr *>(right_expr.get());
+      RC   rc               = complete_field_expr(right_field_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete right field expr for arithmetic expr failed.");
+        return rc;
+      }
+    }
+    if (right_expr->type() == ExprType::AGGREGATE) {
+      auto right_aggr_expr = dynamic_cast<AggregateExpr *>(right_expr.get());
+      RC   rc = AggregateExpr::complete_aggregate_expr(db, default_table, tables, tables_alias, right_aggr_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete right field expr for arithmetic expr failed.");
+        return rc;
+      }
+    }
+    if (right_expr->type() == ExprType::FUNCTION) {
+      auto right_func_expr = dynamic_cast<FunctionExpr *>(right_expr.get());
+      RC   rc = FunctionExpr::complete_function_expr(db, default_table, tables, tables_alias, right_func_expr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("complete right field expr for arithmetic expr failed.");
+        return rc;
+      }
     }
   }
 
@@ -823,18 +1027,67 @@ RC ArithmeticExpr::collect_fields_from_arithmetic_expr(
     }
   }
 
-  if (expr->left() != nullptr && expr->left()->type() == ExprType::FIELD) {
-    auto left_field_expr = dynamic_cast<FieldExpr *>(expr->left().get());
-    if (0 == strcmp(table_name, left_field_expr->table_name())) {
-      fields.emplace_back(left_field_expr->field());
+  if (expr->left() != nullptr && expr->left()->type() != ExprType::ARITHMETIC) {
+    auto left_expr_type = expr->left()->type();
+    if (left_expr_type == ExprType::FIELD || left_expr_type == ExprType::AGGREGATE ||
+        left_expr_type == ExprType::FUNCTION) {
+      // auto left_field_expr = dynamic_cast<FieldExpr *>(expr->left().get());
+      if (0 == strcmp(table_name, expr->table_name())) {
+        const auto &field = expr->get_field();
+        if (field.table() != nullptr && field.meta() != nullptr) {
+          fields.emplace_back(expr->get_field());
+        }
+      }
     }
   }
 
-  if (expr->right() != nullptr && expr->right()->type() == ExprType::FIELD) {
-    auto right_field_expr = dynamic_cast<FieldExpr *>(expr->right().get());
-    if (0 == strcmp(table_name, right_field_expr->table_name())) {
-      fields.emplace_back(right_field_expr->field());
+  if (expr->right() != nullptr && expr->right()->type() != ExprType::ARITHMETIC) {
+    auto right_expr_type = expr->right()->type();
+    if (right_expr_type == ExprType::FIELD || right_expr_type == ExprType::AGGREGATE ||
+        right_expr_type == ExprType::FUNCTION) {
+      // auto right_field_expr = dynamic_cast<FieldExpr *>(expr->right().get());
+      if (0 == strcmp(table_name, expr->table_name())) {
+        const auto &field = expr->get_field();
+        if (field.table() != nullptr && field.meta() != nullptr) {
+          fields.emplace_back(expr->get_field());
+        }
+      }
     }
+  }
+  return RC::SUCCESS;
+}
+
+RC ArithmeticExpr::collect_aggregates_from_arithmetic_expr(
+    ArithmeticExpr *expr, std::vector<shared_ptr<Expression>> &aggrs)
+{
+
+  if (expr == nullptr) {
+    return RC::SUCCESS;
+  }
+  if (expr->left() != nullptr && expr->left()->type() == ExprType::ARITHMETIC) {
+    auto left_arith_expr = dynamic_cast<ArithmeticExpr *>(expr->left().get());
+    RC   rc              = collect_aggregates_from_arithmetic_expr(left_arith_expr, aggrs);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  if (expr->right() != nullptr && expr->right()->type() == ExprType::ARITHMETIC) {
+    auto right_arith_expr = dynamic_cast<ArithmeticExpr *>(expr->right().get());
+    RC   rc               = collect_aggregates_from_arithmetic_expr(right_arith_expr, aggrs);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  if (expr->left() != nullptr && expr->left()->type() == ExprType::AGGREGATE) {
+    auto left_aggr_expr = dynamic_cast<AggregateExpr *>(expr->left().get());
+    aggrs.emplace_back(make_shared<AggregateExpr>(left_aggr_expr->aggregate_type(), left_aggr_expr->get_field()));
+  }
+
+  if (expr->right() != nullptr && expr->right()->type() == ExprType::AGGREGATE) {
+    auto right_aggr_expr = dynamic_cast<AggregateExpr *>(expr->right().get());
+    aggrs.emplace_back(make_shared<AggregateExpr>(right_aggr_expr->aggregate_type(), right_aggr_expr->get_field()));
   }
   return RC::SUCCESS;
 }

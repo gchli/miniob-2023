@@ -42,7 +42,7 @@ public:
   StmtType type() const override { return StmtType::SELECT; }
 
 public:
-  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool find_ctx=false);
+  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool find_ctx = false);
 
 public:
   const std::vector<Table *> &tables() const { return tables_; }
@@ -69,5 +69,6 @@ private:
 
   FilterStmt                         *having_stmt_ = nullptr;
   std::vector<shared_ptr<Expression>> having_exprs_;
+  std::vector<shared_ptr<Expression>> other_func_aggr_field_exprs_;
   std::vector<std::string>            field_alias_;
 };

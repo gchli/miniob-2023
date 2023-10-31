@@ -28,6 +28,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
+#include "storage/field/field_meta.h"
+#include "storage/table/table.h"
 
 class Tuple;
 class LogicalOperator;
@@ -170,6 +172,8 @@ public:
   const std::string          &get_tmp_attribute_name() const { return tmp_attribute_name_; }
   const std::string          &get_tmp_alias() const { return tmp_alias_; }
   std::unique_ptr<Expression> clone() const override { return std::make_unique<FieldExpr>(field_); }
+  static RC complete_field_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, FieldExpr *expr);
 
 private:
   Field       field_;
@@ -407,6 +411,9 @@ public:
       std::unordered_map<std::string, std::string> *tables_alias, ArithmeticExpr *expr);
   static RC collect_fields_from_arithmetic_expr(
       ArithmeticExpr *expr, std::vector<Field> &fields, const char *table_name);
+  static RC collect_aggregates_from_arithmetic_expr(ArithmeticExpr *expr, std::vector<shared_ptr<Expression>> &aggrs);
+  static RC collect_aggregate_from_arithmetic_expr(
+      ArithmeticExpr *expr, std::vector<Field> &fields, const char *table_name);
 
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
@@ -428,6 +435,14 @@ public:
   }
   AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta)
       : aggregate_type_(type), field_(table, field_meta)
+  {}
+  AggregateExpr(const RelAttrSqlNode &attr_node)
+      : is_uncompleted_(true),
+        aggregate_type_(attr_node.aggr_type),
+        tmp_relation_name_(attr_node.relation_name),
+        tmp_attribute_name_(attr_node.attribute_name),
+        tmp_alias_(attr_node.alias),
+        alias_(attr_node.alias)
   {}
   AggregateExpr(const AggregateExpr &other) = default;
   virtual ~AggregateExpr()                  = default;  // todo(ligch)
@@ -455,18 +470,28 @@ public:
   const FieldExpr &get_field_expr() const { return field_; }
   const Field      get_field() const override { return field_.field(); }
   void             set_field(const Field &field) { field_ = FieldExpr(field); }
-  std::string      get_alis() const { return alis_; }
-  void             set_alis(const char *alis) { this->alis_ = alis; }
-  const Field     &field() { return field_.field(); }
-  const char      *table_name() const override { return field_.table_name(); }
-  const char      *field_name() const override { return field_.field_name(); }
+  void        set_field_expr(const Table *table, const FieldMeta *field_meta) { field_ = FieldExpr(table, field_meta); }
+  std::string get_alis() const { return alias_; }
+  void        set_alis(const char *alis) { this->alias_ = alis; }
+  const Field       &field() { return field_.field(); }
+  const char        *table_name() const override { return field_.table_name(); }
+  const char        *field_name() const override { return field_.field_name(); }
+  const std::string &get_tmp_relation_name() const { return tmp_relation_name_; }
+  const std::string &get_tmp_attribute_name() const { return tmp_attribute_name_; }
+  const std::string &get_tmp_alias() const { return tmp_alias_; }
+  static RC complete_aggregate_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, AggregateExpr *expr);
 
 private:
   AggrType    aggregate_type_;
   FieldExpr   field_;
-  std::string alis_;
+  std::string alias_;
 
-  Value val_;
+  bool        is_uncompleted_{false};
+  std::string tmp_attribute_name_{""};
+  std::string tmp_relation_name_{""};
+  std::string tmp_alias_{""};
+  Value       val_;
 };
 
 class FunctionExpr : public Expression
@@ -478,9 +503,18 @@ public:
   FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr,
       const std::shared_ptr<Expression> &second_obj_expr, std::string alias = "");
   virtual ~FunctionExpr() = default;  // todo(ligch)
-  static RC   create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
-        std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
-        shared_ptr<FunctionExpr> &func_expr);
+
+  FunctionExpr(const RelAttrSqlNode &attr_node)
+      : is_uncompleted_(true), function_type_(attr_node.func_type), tmp_alias_(attr_node.alias), alias_(attr_node.alias)
+  {}
+
+  static RC create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table *default_table,
+      std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+      shared_ptr<FunctionExpr> &func_expr);
+
+  static RC complete_function_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, FunctionExpr *expr);
+
   ExprType    type() const override { return ExprType::FUNCTION; }
   std::string name() const override;
   std::string name(bool with_table) const;
@@ -506,7 +540,7 @@ public:
     }
     return RC::EMPTY;
   }
-
+  void                    set_first_expr(shared_ptr<Expression> &expr) { first_obj_expr_ = expr; }
   shared_ptr<Expression> &get_first_expr() { return first_obj_expr_; }
   ExprType                get_first_expr_type()
   {
@@ -515,6 +549,8 @@ public:
     }
     return first_obj_expr_->type();
   }
+
+  void                    set_second_expr(shared_ptr<Expression> &expr) { second_obj_expr_ = expr; }
   shared_ptr<Expression> &get_second_expr() { return second_obj_expr_; }
   ExprType                get_second_expr_type()
   {
@@ -550,6 +586,10 @@ public:
     return {};
   }
 
+  const FuncArgSqlNode &get_tmp_first_func_arg() const { return tmp_first_func_arg_; }
+  const FuncArgSqlNode &get_tmp_second_func_arg() const { return tmp_second_func_arg_; }
+  const std::string    &get_tmp_alias() const { return tmp_alias_; }
+
 private:
   FuncType function_type_{UNDEFINED_T};
 
@@ -557,5 +597,10 @@ private:
   shared_ptr<Expression> second_obj_expr_{nullptr};
   std::string            alias_{""};
 
-  mutable Value val_;
+  bool is_uncompleted_{false};
+
+  std::string    tmp_alias_{""};
+  FuncArgSqlNode tmp_first_func_arg_;
+  FuncArgSqlNode tmp_second_func_arg_;
+  mutable Value  val_;
 };

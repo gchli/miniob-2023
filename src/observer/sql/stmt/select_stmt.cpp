@@ -105,7 +105,6 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   }
 
   // collect tables in join statements
-  // create join statement
   // todo(ligch): join stmts haven't support table alias yet
   for (size_t i = 0; i < select_sql.joins.size(); i++) {
     const InnerJoinSqlNode &join_node       = select_sql.joins[i];
@@ -122,6 +121,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   std::vector<shared_ptr<JoinStmt>> join_stmts;
   bool                              has_join = select_sql.joins.size() > 0;
 
+  // create join statement
   if (has_join) {
     for (const auto &join_node : select_sql.joins) {
       const char *table_name = join_node.relation_name.c_str();
@@ -157,83 +157,50 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
-    // create aggregate expressions
-    if (relation_attr.is_aggr) {
-      AggrType    aggr_type  = relation_attr.aggr_type;
-      const char *table_name = relation_attr.relation_name.c_str();
-      const char *field_name = relation_attr.attribute_name.c_str();
-      if (!common::is_blank(relation_attr.relation_name.c_str())) {
-        auto iter = table_map.find(table_name);
-        if (iter == table_map.end()) {
-          if (table_alias.find(string(table_name)) == table_alias.end()) {
-            LOG_WARN("no such table in from list: %s", table_name);
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-          auto table_real_name = table_alias[table_name];
-          if (table_map.find(table_real_name) == table_map.end()) {
-            LOG_WARN("no such table in from list: %s", table_name);
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-          iter = table_map.find(table_real_name);
-        }
-
-        auto             table      = iter->second;
-        const FieldMeta *field_meta = table->table_meta().field(field_name);
-        if (nullptr == field_meta) {
-          if ((0 == strcmp(field_name, "*"))) {
-            field_meta = new FieldMeta("*");
-          } else {
-            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-        }
-        field_alias.emplace_back(relation_attr.alias);
-        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
-      } else if (0 == strcmp(field_name, "*") && relation_attr.aggr_type == COUNT_T) {
-        // select count(*)
-
-        Table           *table      = new Table();
-        const FieldMeta *field_meta = new FieldMeta("*");
-        field_alias.emplace_back(relation_attr.alias);
-        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
-      } else {
-        if (tables.size() != 1) {
-          LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-
-        Table           *table      = tables[0];
-        const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-        if (nullptr == field_meta) {
-          if ((0 == strcmp(field_name, "*"))) {
-            field_meta = new FieldMeta("*");
-          } else {
-            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-        }
-        field_alias.emplace_back(relation_attr.alias);
-        query_exprs.emplace_back(make_shared<AggregateExpr>(aggr_type, table, field_meta));
-      }
-      continue;
-    }
-    // create function expressions
-    if (relation_attr.is_func) {
-      shared_ptr<FunctionExpr> func_expr{nullptr};
-      Table                   *default_table = tables.size() > 0 ? tables[0] : nullptr;
-      RC rc = FunctionExpr::create_func_expr(db, relation_attr, default_table, &table_map, &table_alias, func_expr);
-      if (rc != RC::SUCCESS) {
-        return rc;
-      }
-      if (func_expr != nullptr) {
-        field_alias.emplace_back(relation_attr.alias);
-        query_exprs.emplace_back(func_expr);
-      }
-      continue;
-    }
     if (relation_attr.is_expr) {
       auto expr = relation_attr.expr;
       // create field expressions
+      if (expr->type() == ExprType::AGGREGATE) {
+        // create aggregate expressions
+        auto   aggregate_expr = dynamic_cast<AggregateExpr *>(expr);
+        Table *default_table  = tables.size() > 0 ? tables[0] : nullptr;
+        RC     rc = AggregateExpr::complete_aggregate_expr(db, default_table, &table_map, &table_alias, aggregate_expr);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("complete aggregate expression failed");
+          return rc;
+        }
+        field_alias.emplace_back(aggregate_expr->get_tmp_alias());
+        query_exprs.emplace_back(aggregate_expr);
+        continue;
+      }
+
+      if (expr->type() == ExprType::FUNCTION) {
+        auto   func_expr     = dynamic_cast<FunctionExpr *>(expr);
+        Table *default_table = tables.size() > 0 ? tables[0] : nullptr;
+        RC     rc = FunctionExpr::complete_function_expr(db, default_table, &table_map, &table_alias, func_expr);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("complete aggregate expression failed");
+          return rc;
+        }
+        field_alias.emplace_back(func_expr->get_tmp_alias());
+        query_exprs.emplace_back(func_expr);
+        continue;
+      }
+
+      if (expr->type() == ExprType::ARITHMETIC) {
+        auto   arithmetic_expr = dynamic_cast<ArithmeticExpr *>(expr);
+        Table *default_table   = tables.size() > 0 ? tables[0] : nullptr;
+        RC rc = ArithmeticExpr::complete_arithmetic_expr(db, default_table, &table_map, &table_alias, arithmetic_expr);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("complete arithmetic expression failed");
+          return rc;
+        }
+        field_alias.emplace_back(relation_attr.alias);
+        query_exprs.emplace_back(arithmetic_expr);
+        // todo(ligch): collect aggregate expressions from arithmetic expr
+        continue;
+      }
+
       if (expr->type() == ExprType::FIELD) {
         auto field_expr = dynamic_cast<FieldExpr *>(expr);
         // auto rel_alias      = relation_attr.alias;
@@ -304,14 +271,6 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         continue;
       }
 
-      if (expr->type() == ExprType::ARITHMETIC) {
-        auto   arithmetic_expr = dynamic_cast<ArithmeticExpr *>(expr);
-        Table *default_table   = tables.size() > 0 ? tables[0] : nullptr;
-        RC rc = ArithmeticExpr::complete_arithmetic_expr(db, default_table, &table_map, &table_alias, arithmetic_expr);
-        query_exprs.emplace_back(arithmetic_expr);
-        continue;
-      }
-
       if (expr->type() == ExprType::VALUE) {
         LOG_WARN("shouldn't happen.");
         continue;
@@ -342,6 +301,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   }
 
   // create order by statements
+  // 目前order by 只涉及rel_attr, 因此目前expression的改动未对其造成影响
   std::vector<shared_ptr<OrderByStmt>> order_by_stmts;
   for (int i = 0; i < select_sql.order_bys.size(); i++) {
     const OrderBySqlNode &order_by_node = select_sql.order_bys[i];
@@ -391,8 +351,10 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         return RC::INVALID_ARGUMENT;
       }
     } else {
-      table_name = group_by_attr.relation_name.c_str();
-      field_name = group_by_attr.attribute_name.c_str();
+      LOG_WARN("shouldn't happen.");
+      return RC::INVALID_ARGUMENT;
+      // table_name = group_by_attr.relation_name.c_str();
+      // field_name = group_by_attr.attribute_name.c_str();
     }
 
     if ((0 == strcmp(field_name, "*")) || (0 == strcmp(table_name, "*"))) {
@@ -419,11 +381,11 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
       return RC::SCHEMA_FIELD_MISSING;
     }
 
-    if (group_by_attr.is_aggr) {
-      group_by_exprs_.emplace_back(make_shared<AggregateExpr>(group_by_attr.aggr_type, table, field_meta));
-    } else {
-      group_by_exprs_.emplace_back(make_shared<FieldExpr>(table, field_meta));
-    }
+    // if (group_by_attr.is_aggr) {
+    //   group_by_exprs_.emplace_back(make_shared<AggregateExpr>(group_by_attr.aggr_type, table, field_meta));
+    // } else {
+    group_by_exprs_.emplace_back(make_shared<FieldExpr>(table, field_meta));
+    // }
   }
   Table *table = default_table;
   // create having statement
@@ -431,71 +393,34 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   std::vector<shared_ptr<Expression>> having_exprs;
   if (!select_sql.havings.empty()) {
     for (const auto &cond : select_sql.havings) {
-      if (cond.left_is_attr && cond.left_attr.is_aggr) {
-        AggrType         aggr_type  = cond.left_attr.aggr_type;
-        string           table_name = cond.left_attr.relation_name;
-        string           field_name = cond.left_attr.attribute_name;
-        const FieldMeta *field_meta = nullptr;
-        if (!common::is_blank(table_name.c_str())) {
-          auto iter = table_map.find(table_name);
-          if (iter == table_map.end()) {
-            LOG_WARN("no such table in from list: %s", table_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
+      if (cond.left_is_attr) {
+        assert(cond.left_attr.is_expr);
+        const auto &cond_left_expr = cond.left_attr.expr;
+        if (cond_left_expr->type() == ExprType::AGGREGATE) {
+          auto   aggregate_expr = dynamic_cast<AggregateExpr *>(cond_left_expr);
+          Table *default_table  = tables.size() > 0 ? tables[0] : nullptr;
+          RC rc = AggregateExpr::complete_aggregate_expr(db, default_table, &table_map, &table_alias, aggregate_expr);
+          if (rc != RC::SUCCESS) {
+            LOG_WARN("complete aggregate expression failed");
+            return rc;
           }
-          table = iter->second;
-        } else {
-          if (table_map.size() != 1) {
-            LOG_WARN("table size should be 1 for xx by stmt.");
-            return RC::SCHEMA_FIELD_MISSING;
-          }
+          having_exprs.emplace_back(aggregate_expr);
         }
-        if (0 == strcmp(field_name.c_str(), "*")) {
-          if (aggr_type != COUNT_T) {
-            return RC::INVALID_ARGUMENT;
-          }
-          field_meta = new FieldMeta("*");
-        } else {
-          field_meta = table->table_meta().field(field_name.c_str());
-          if (nullptr == field_meta) {
-            LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-        }
-        having_exprs.emplace_back(make_shared<AggregateExpr>(cond.left_attr.aggr_type, table, field_meta));
       }
 
-      if (cond.right_is_attr && cond.right_attr.is_aggr) {
-        AggrType         aggr_type  = cond.right_attr.aggr_type;
-        string           table_name = cond.right_attr.relation_name;
-        string           field_name = cond.right_attr.attribute_name;
-        Table           *table      = default_table;
-        const FieldMeta *field_meta = nullptr;
-        if (!common::is_blank(table_name.c_str())) {
-          auto iter = table_map.find(table_name);
-          if (iter == table_map.end()) {
-            LOG_WARN("no such table in from list: %s", table_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
+      if (cond.right_is_attr) {
+        assert(cond.right_attr.is_expr);
+        const auto &cond_right_expr = cond.right_attr.expr;
+        if (cond_right_expr->type() == ExprType::AGGREGATE) {
+          auto   aggregate_expr = dynamic_cast<AggregateExpr *>(cond_right_expr);
+          Table *default_table  = tables.size() > 0 ? tables[0] : nullptr;
+          RC rc = AggregateExpr::complete_aggregate_expr(db, default_table, &table_map, &table_alias, aggregate_expr);
+          if (rc != RC::SUCCESS) {
+            LOG_WARN("complete aggregate expression failed");
+            return rc;
           }
-          table = iter->second;
-        } else {
-          if (table_map.size() != 1) {
-            LOG_WARN("table size should be 1 for xx by stmt.");
-            return RC::SCHEMA_FIELD_MISSING;
-          }
+          having_exprs.emplace_back(aggregate_expr);
         }
-        if (0 == strcmp(field_name.c_str(), "*")) {
-          if (aggr_type != COUNT_T) {
-            return RC::INVALID_ARGUMENT;
-          }
-          field_meta = new FieldMeta("*");
-        } else {
-          field_meta = table->table_meta().field(field_name.c_str());
-          if (nullptr == field_meta) {
-            LOG_WARN("no such field. field=%s.%s.%s", table->name(), field_name.c_str());
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-        }
-        having_exprs.emplace_back(make_shared<AggregateExpr>(cond.right_attr.aggr_type, table, field_meta));
       }
     }
 

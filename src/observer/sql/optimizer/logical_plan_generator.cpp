@@ -108,6 +108,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   std::vector<shared_ptr<Expression>> query_aggr_exprs;
   std::vector<shared_ptr<Expression>> query_func_exprs;
   std::vector<shared_ptr<Expression>> query_arithmetic_exprs;
+  std::vector<shared_ptr<Expression>> aggr_exprs_in_arithmetic;
   // todo(ligch): 应该结合是否有group by进行判断，放在之后进行优化
 
   for (const auto &expr : all_query_exprs) {
@@ -119,9 +120,12 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       query_func_exprs.push_back(expr);
     } else if (expr->type() == ExprType::ARITHMETIC) {
       query_arithmetic_exprs.push_back(expr);
+      const auto &arithmetic_expr = dynamic_pointer_cast<ArithmeticExpr>(expr);
+      ArithmeticExpr::collect_aggregates_from_arithmetic_expr(arithmetic_expr.get(), aggr_exprs_in_arithmetic);
     }
   }
-  bool has_aggr            = !query_aggr_exprs.empty();
+
+  bool has_aggr            = !query_aggr_exprs.empty() || !aggr_exprs_in_arithmetic.empty();
   bool has_field_query     = !query_field_exprs.empty();
   bool has_group_by        = !select_stmt->group_by_exprs().empty();
   bool has_func            = !query_func_exprs.empty();
@@ -146,7 +150,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
             return true;
           });
       if (iter == query_aggr_exprs.end()) {
-        LOG_WARN("select stmt has both aggregate and non-aggregate exprs. query field isn't in group by exprs.");
+        LOG_WARN("select stmt has both aggregate and non-aggregate exprs but query field isn't in group by exprs.");
         return RC::INVALID_ARGUMENT;
       }
     }
@@ -263,6 +267,9 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       aggr_oper->set_having(select_stmt->having_stmt());
       aggr_oper->set_having_exprs(select_stmt->having_exprs());
     }
+    if (!aggr_exprs_in_arithmetic.empty()) {
+      aggr_oper->set_having_exprs(aggr_exprs_in_arithmetic);
+    }
     select_oper = std::move(aggr_oper);
   }
 
@@ -312,6 +319,11 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
             func_expr->get_first_expr(),
             func_expr->get_second_expr(),
             func_expr->get_alias());
+        break;
+      }
+      if (filter_obj.expression->type() == ExprType::AGGREGATE) {
+        const auto &aggr_expr = dynamic_pointer_cast<AggregateExpr>(filter_obj.expression);
+        expr                  = new AggregateExpr(aggr_expr->aggregate_type(), aggr_expr->get_field());
         break;
       }
       if (filter_obj.expression->type() == ExprType::ARITHMETIC) {
