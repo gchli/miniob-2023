@@ -235,13 +235,14 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
       auto expr = relation_attr.expr;
       // create field expressions
       if (expr->type() == ExprType::FIELD) {
-        auto field_expr     = dynamic_cast<FieldExpr *>(expr);
-        auto rel_alias      = relation_attr.alias;
+        auto field_expr = dynamic_cast<FieldExpr *>(expr);
+        // auto rel_alias      = relation_attr.alias;
+        auto alias          = field_expr->get_tmp_alias();
         auto relation_name  = field_expr->get_tmp_relation_name();
         auto attribute_name = field_expr->get_tmp_attribute_name();
         if (common::is_blank(relation_name.c_str()) && 0 == strcmp(attribute_name.c_str(), "*")) {
           for (Table *table : tables) {
-            wildcard_fields(table, query_exprs, "");  // todo: fix alias
+            wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
           }
         } else if (!common::is_blank(relation_name.c_str())) {
           if (0 == strcmp(relation_name.c_str(), "*")) {
@@ -250,7 +251,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
               return RC::SCHEMA_FIELD_MISSING;
             }
             for (Table *table : tables) {
-              wildcard_fields(table, query_exprs, "");  // todo: fix alias
+              wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
             }
           } else {
             auto iter = table_map.find(relation_name);
@@ -278,7 +279,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
               }
               auto field_expr = make_shared<FieldExpr>(table, field_meta);
               field_expr->set_table_alias(relation_name.c_str());
-              field_alias.emplace_back(relation_attr.alias);
+              field_alias.emplace_back(alias);
               query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
             }
           }
@@ -298,14 +299,19 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           auto field_expr = make_shared<FieldExpr>(table, field_meta);
           field_expr->set_table_alias(table->name());
           query_exprs.emplace_back(field_expr);
+          field_alias.emplace_back(field_expr->get_tmp_alias());
         }
         continue;
       }
 
       if (expr->type() == ExprType::ARITHMETIC) {
-
+        auto   arithmetic_expr = dynamic_cast<ArithmeticExpr *>(expr);
+        Table *default_table   = tables.size() > 0 ? tables[0] : nullptr;
+        RC rc = ArithmeticExpr::complete_arithmetic_expr(db, default_table, &table_map, &table_alias, arithmetic_expr);
+        query_exprs.emplace_back(arithmetic_expr);
         continue;
       }
+
       if (expr->type() == ExprType::VALUE) {
         LOG_WARN("shouldn't happen.");
         continue;

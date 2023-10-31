@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "common/log/log.h"
+#include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/operator/project_physical_operator.h"
 #include "sql/parser/parse_defs.h"
@@ -39,7 +40,7 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
-  if (children_.empty() && !function_exprs.empty()) {
+  if (children_.empty() && (!function_exprs_.empty() || !arithmetic_exprs_.empty())) {
     if (!is_ended_) {
       is_ended_ = true;
       return RC::SUCCESS;
@@ -65,7 +66,7 @@ RC ProjectPhysicalOperator::close()
 
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  if (children_.empty() && !function_exprs.empty()) {
+  if (children_.empty() && (!function_exprs_.empty() || !arithmetic_exprs_.empty())) {
     tuple_.set_tuple(new RowTuple());
   } else {
     tuple_.set_tuple(children_[0]->current_tuple());
@@ -101,5 +102,10 @@ void ProjectPhysicalOperator::add_projection(const std::string &alias, shared_pt
 
 void ProjectPhysicalOperator::add_function_expr(const shared_ptr<FunctionExpr> &func_expr)
 {
-  function_exprs.push_back(func_expr);
+  function_exprs_.push_back(func_expr);
+}
+
+void ProjectPhysicalOperator::add_arithmetic_expr(const shared_ptr<ArithmeticExpr> &arithmetic_expr)
+{
+  arithmetic_exprs_.push_back(arithmetic_expr);
 }

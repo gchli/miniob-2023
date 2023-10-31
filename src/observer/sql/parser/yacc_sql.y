@@ -178,18 +178,20 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <string>              alias_optional;
 %type <condition>           condition
 %type <value>               value
+%type <value>               minus_value
 %type <number>              number
 %type <comp>                comp_op
 %type <order_t>             order_type
 %type <order_by_attr>       order_by_attr
 %type <order_by_list>       order_by
 %type <order_by_list>       order_by_list
-/* %type <join_op>             join_op */
 %type <rel_attr>            rel_attr
-/* %type <rel_attr>            rel_attr_with_alias */
+%type <rel_attr>            rel_attr_with_alias
+%type <rel_attr>            rel_attr_no_alias
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
+%type <value_list>          cond_value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
 %type <condition_list>      having
@@ -233,9 +235,13 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
+
+/* %left EQ LT GT LE NE */
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
+%right ID
+%left AS DOT
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -648,11 +654,51 @@ insert_stmt:        /*insert   语句的语法解析树*/
       delete $9;
       delete $7;
     }
+    |
+        INSERT INTO ID VALUES LBRACE minus_value value_list RBRACE insert_list
+    {
+      $$ = new ParsedSqlNode(SCF_INSERT);
+      $$->insertion.relation_name = $3;
+      std::vector<Value> first_value;
+      if ($7 != nullptr) {
+        first_value.swap(*$7);
+      }
+      first_value.emplace_back(*$6);
+      std::reverse(first_value.begin(), first_value.end());
+
+      if ($9 != nullptr) {
+        $$->insertion.insert_values.swap(*$9);
+      }
+      $$->insertion.insert_values.emplace_back(std::move(first_value));
+      std::reverse($$->insertion.insert_values.begin(), $$->insertion.insert_values.end());
+
+      delete $6;
+      free($3);
+      delete $9;
+      delete $7;
+    }
     ;
 
 insert_list:
   {
     $$ = nullptr;
+  }
+  | COMMA LBRACE minus_value value_list RBRACE insert_list
+  {
+    std::vector<Value> first_value;
+    if ($4 != nullptr) {
+      first_value.swap(*$4);
+    }
+    first_value.emplace_back(*$3);
+    std::reverse(first_value.begin(), first_value.end());
+
+    if ($6 != nullptr) {
+      $$ = $6;
+    } else {
+      $$ = new std::vector<std::vector<Value>>;
+    }
+    $$->emplace_back(std::move(first_value));
+    delete $6;
   }
   | COMMA LBRACE value value_list RBRACE insert_list
   {
@@ -678,6 +724,15 @@ value_list:
     {
       $$ = nullptr;
     }
+    | COMMA minus_value value_list {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<Value>;
+      }
+      $$->emplace_back(*$2);
+      delete $2;
+    }
     | COMMA value value_list  {
       if ($3 != nullptr) {
         $$ = $3;
@@ -688,6 +743,15 @@ value_list:
       delete $2;
     }
     ;
+
+minus_value:     '-' NUMBER {
+      $$ = new Value(0-(int)$2);
+      @$ = @2;
+    }
+    |'-' FLOAT {
+      $$ = new Value(0-(float)$2);
+      @$ = @2;
+    }
 
 value:
     NUMBER {
@@ -844,6 +908,16 @@ select_body:
       $$->attributes.emplace_back(*$2);
       free($2);
     }
+    | SELECT expr_attr attr_list
+    {
+      $$ = new SelectSqlNode;
+      if ($3 != nullptr) {
+        $$->attributes.swap(*$3);
+        delete $3;
+      }
+      $$->attributes.emplace_back(*$2);
+      free($2);
+    }
     ;
 
 calc_stmt:
@@ -876,33 +950,40 @@ expression_list:
 expression:
     expression '+' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
+      LOG_DEBUG("ADD");
     }
     | expression '-' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
+      LOG_DEBUG("SUB");
     }
     | expression '*' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
+      LOG_DEBUG("MUL");
     }
     | expression '/' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
+      LOG_DEBUG("DIV");
     }
     | LBRACE expression RBRACE {
       $$ = $2;
       $$->set_name(token_name(sql_string, &@$));
+      LOG_DEBUG("()");
     }
     | '-' expression %prec UMINUS {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
+      LOG_DEBUG("-");
+    }
+    | rel_attr {
+      $$ = new FieldExpr(*$1);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $1;
     }
     | value {
       $$ = new ValueExpr(*$1);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
-    | rel_attr {
-        $$ = new FieldExpr(*$1);
-        $$->set_name(token_name(sql_string, &@$));
-        delete $1;
-    };
+;
 
 
 select_attr:
@@ -968,36 +1049,8 @@ alias_optional:
     }
     ;
 
-
-/* rel_attr_with_alias:
-    rel_attr ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = $2;
-      free($1);
-      free($2);
-    }
-    | rel_attr AS ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = $3;
-      free($1);
-      free($3);
-    }; */
-
-
-rel_attr:
-    ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = $2;
-      free($1);
-      free($2);
-    }
-    | ID DOT ID {
+rel_attr_with_alias:
+    ID DOT ID ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->relation_name  = $1;
@@ -1007,6 +1060,43 @@ rel_attr:
       free($3);
       free($4);
     }
+    | ID DOT ID AS ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias = $5;
+      free($1);
+      free($3);
+      free($5);
+    }
+    | ID ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | ID AS ID  {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
+    }
+
+rel_attr_no_alias:
+    ID DOT ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias = "";
+      free($1);
+      free($3);
+    }
     | ID DOT '*' {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -1014,25 +1104,28 @@ rel_attr:
       $$->attribute_name = '*';
       free($1);
     }
+    | ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = "";
+      free($1);
+    }
     ;
 
-
+rel_attr:
+  rel_attr_no_alias {
+    $$ = $1;
+  }
+  | rel_attr_with_alias {
+    $$ = $1;
+  };
 
 attr_list:
     /* empty */
     {
       $$ = nullptr;
     }
-    /* | COMMA rel_attr attr_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-
-      $$->emplace_back(*$2);
-      delete $2;
-    } */
     | COMMA aggr_func attr_list {
       if ($3 != nullptr) {
         $$ = $3;
@@ -1258,6 +1351,26 @@ condition_list:
     }
     ;
 
+cond_value_list:
+
+    value COMMA value {
+      $$ = new std::vector<Value>;
+      $$->emplace_back(*$1);
+      $$->emplace_back(*$3);
+      delete $1;
+      delete $3;
+    }
+    | value COMMA cond_value_list  {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<Value>;
+      }
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    ;
+
 condition:
     normal_func comp_op expr_attr
     {
@@ -1344,16 +1457,6 @@ condition:
       $$->comp = $2;
       delete $1;
     }
-    /* | rel_attr comp_op LBRACE select_body RBRACE
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_select = 1;
-      $$->right_select = $4;
-      $$->comp = $2;
-      delete $1;
-    } */
     | LBRACE select_body RBRACE comp_op expr_attr
     {
       $$ = new ConditionSqlNode;
@@ -1364,16 +1467,6 @@ condition:
       $$->comp = $4;
       delete $5;
     }
-    /* | LBRACE select_body RBRACE comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_select = 1;
-      $$->left_select = $2;
-      $$->right_is_attr = 0;
-      $$->right_value = *$5;
-      $$->comp = $4;
-      delete $5;
-    } */
     | LBRACE select_body RBRACE comp_op LBRACE select_body RBRACE
     {
       $$ = new ConditionSqlNode;
@@ -1392,7 +1485,7 @@ condition:
       $$->comp = $1;
       $$->unary_op = 1;
     }
-    | expr_attr comp_op LBRACE value value_list RBRACE
+    | expr_attr comp_op LBRACE cond_value_list RBRACE
     {
       // HERE
       $$ = new ConditionSqlNode;
@@ -1400,10 +1493,10 @@ condition:
       $$->left_attr = *$1;
       $$->right_is_select = 1;
       $$->comp = $2;
-      $$->values.swap(*$5);
-      $$->values.emplace_back(*$4);
+      $$->values.swap(*$4);
+      // $$->values.emplace_back(*$4);
       std::reverse($$->values.begin(), $$->values.end());
-      delete $5;
+      // delete $5;
     }
     ;
 

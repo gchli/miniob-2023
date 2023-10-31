@@ -44,7 +44,9 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include <cassert>
+#include <cstddef>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -105,6 +107,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   std::vector<shared_ptr<Expression>> query_field_exprs;
   std::vector<shared_ptr<Expression>> query_aggr_exprs;
   std::vector<shared_ptr<Expression>> query_func_exprs;
+  std::vector<shared_ptr<Expression>> query_arithmetic_exprs;
   // todo(ligch): 应该结合是否有group by进行判断，放在之后进行优化
 
   for (const auto &expr : all_query_exprs) {
@@ -114,12 +117,15 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       query_field_exprs.push_back(expr);
     } else if (expr->type() == ExprType::FUNCTION) {
       query_func_exprs.push_back(expr);
+    } else if (expr->type() == ExprType::ARITHMETIC) {
+      query_arithmetic_exprs.push_back(expr);
     }
   }
-  bool has_aggr        = !query_aggr_exprs.empty();
-  bool has_field_query = !query_field_exprs.empty();
-  bool has_group_by    = !select_stmt->group_by_exprs().empty();
-  bool has_func        = !query_func_exprs.empty();
+  bool has_aggr            = !query_aggr_exprs.empty();
+  bool has_field_query     = !query_field_exprs.empty();
+  bool has_group_by        = !select_stmt->group_by_exprs().empty();
+  bool has_func            = !query_func_exprs.empty();
+  bool has_arithmetic_expr = !query_arithmetic_exprs.empty();
 
   if (has_aggr && has_field_query && !has_group_by) {
     LOG_WARN("select stmt has both aggregate and non-aggregate exprs and no group by exprs.");
@@ -179,6 +185,17 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
           }
           continue;
         }
+
+        if (expr->type() == ExprType::ARITHMETIC) {
+          // second arg expression in func_expr should be value, so only need to check the first arg.
+          const auto &converted_arithmetic_expr = dynamic_pointer_cast<ArithmeticExpr>(expr);
+          RC          rc                        = ArithmeticExpr::collect_fields_from_arithmetic_expr(
+              converted_arithmetic_expr.get(), fields, table->name());
+          if (rc != RC::SUCCESS) {
+            return rc;
+          }
+          continue;
+        }
       }
       unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, true /*readonly*/));
       if (table_oper == nullptr) {
@@ -216,8 +233,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   unique_ptr<LogicalOperator> predicate_oper;
   if (select_stmt->filter_stmt() != nullptr) {  // should we check it?
-      RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
-      if (rc == RC::NEED_APPLY) {
+    RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
+    if (rc == RC::NEED_APPLY) {
       rc = create_apply_plan(select_stmt->filter_stmt(), std::move(table_oper), predicate_oper);
     } else if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
@@ -250,7 +267,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
 
   if (predicate_oper) {
-    if (table_oper) { // 这他妈是废话啊，table_oper不可能为空啊
+    if (table_oper) {  // 这他妈是废话啊，table_oper不可能为空啊
       predicate_oper->add_child(std::move(table_oper));
     }
     select_oper->add_child(std::move(predicate_oper));
@@ -272,7 +289,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   return RC::SUCCESS;
 }
 
-unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj) {
+unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
+{
   Expression *expr;
   switch (filter_obj.type) {
     case FilterObj::FilterObjType::FILTER_OBJ_ATTR: {
@@ -288,21 +306,32 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj) 
       expr = new SelectExpr(filter_obj.select_stmt_);
     } break;
     case FilterObj::FilterObjType::FILTER_OBJ_EXPR: {
-      const auto &func_expr = dynamic_pointer_cast<FunctionExpr>(filter_obj.expression);
-        expr = new FunctionExpr(func_expr->function_type(),
+      if (filter_obj.expression->type() == ExprType::FUNCTION) {
+        const auto &func_expr = dynamic_pointer_cast<FunctionExpr>(filter_obj.expression);
+        expr                  = new FunctionExpr(func_expr->function_type(),
             func_expr->get_first_expr(),
             func_expr->get_second_expr(),
             func_expr->get_alias());
+        break;
+      }
+      if (filter_obj.expression->type() == ExprType::ARITHMETIC) {
+        const auto &arithmetic_expr = dynamic_pointer_cast<ArithmeticExpr>(filter_obj.expression);
+        expr                        = new ArithmeticExpr(arithmetic_expr->arithmetic_type(),
+            std::move(arithmetic_expr->left()),
+            std::move(arithmetic_expr->right()));
+        break;
+      }
+
     } break;
-    case FilterObj::FilterObjType::FILTER_OBJ_FATHRE_ATTR: { // 子查询，需要父亲的属性
+    case FilterObj::FilterObjType::FILTER_OBJ_FATHRE_ATTR: {  // 子查询，需要父亲的属性
       (void)expr;
-      auto ctx = FilterCtx::get_instance();
+      auto ctx  = FilterCtx::get_instance();
       auto iter = ctx.tuple_maps_.find(filter_obj.field.table()->name());
       if (iter == ctx.tuple_maps_.end()) {
         LOG_WARN("failed to find table in tuple_maps. table=%s", filter_obj.field.table()->name());
         return nullptr;
       }
-      auto tuple = iter->second;
+      auto  tuple = iter->second;
       Value value;
       RC rc = tuple->find_cell(TupleCellSpec(filter_obj.field.table()->name(), filter_obj.field.field_name()), value);
       if (rc != RC::SUCCESS) {
@@ -310,11 +339,10 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj) 
         return nullptr;
       }
       expr = new ValueExpr(value);
-    //   expr = new FatherFieldExpr(filter_obj.field);
+      //   expr = new FatherFieldExpr(filter_obj.field);
     } break;
-    default:
-      LOG_WARN("unhandeld filter obj type. type=%d", filter_obj.type);
-    }
+    default: LOG_WARN("unhandeld filter obj type. type=%d", filter_obj.type);
+  }
 
   return unique_ptr<Expression>(expr);
 }
@@ -323,7 +351,7 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 {
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
-  bool is_and = true;
+  bool                                is_and       = true;
   for (const FilterUnit *filter_unit : filter_units) {
     const FilterObj       &filter_obj_left  = filter_unit->left();
     const FilterObj       &filter_obj_right = filter_unit->right();
@@ -334,7 +362,7 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
       return RC::NEED_APPLY;
     }
 
-    left = create_expr_from_filter_obj(filter_obj_left);
+    left  = create_expr_from_filter_obj(filter_obj_left);
     right = create_expr_from_filter_obj(filter_obj_right);
 
     ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
@@ -359,11 +387,13 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 }
 
 // 把Filter里边的Unit分开，不需要子查询的放到左边，需要子查询的放到右边
-RC LogicalPlanGenerator::create_apply_plan(FilterStmt *filter_stmt, std::unique_ptr<LogicalOperator> &&table_oper, std::unique_ptr<LogicalOperator> &predicate_oper) {
+RC LogicalPlanGenerator::create_apply_plan(FilterStmt *filter_stmt, std::unique_ptr<LogicalOperator> &&table_oper,
+    std::unique_ptr<LogicalOperator> &predicate_oper)
+{
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
-  std::vector<const FilterUnit *> subselect_filter_units;
-  bool is_and = true;
+  std::vector<const FilterUnit *>     subselect_filter_units;
+  bool                                is_and = true;
   for (const FilterUnit *filter_unit : filter_units) {
     const FilterObj &filter_obj_left  = filter_unit->left();
     const FilterObj &filter_obj_right = filter_unit->right();
@@ -374,7 +404,7 @@ RC LogicalPlanGenerator::create_apply_plan(FilterStmt *filter_stmt, std::unique_
     unique_ptr<Expression> left;
     unique_ptr<Expression> right;
 
-    left = create_expr_from_filter_obj(filter_obj_left);
+    left  = create_expr_from_filter_obj(filter_obj_left);
     right = create_expr_from_filter_obj(filter_obj_right);
 
     ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
@@ -393,22 +423,23 @@ RC LogicalPlanGenerator::create_apply_plan(FilterStmt *filter_stmt, std::unique_
   }
 
   for (const auto *filter_unit : subselect_filter_units) {
-    const FilterObj &filter_obj_left  = filter_unit->left();
-    const FilterObj &filter_obj_right = filter_unit->right();
+    const FilterObj       &filter_obj_left  = filter_unit->left();
+    const FilterObj       &filter_obj_right = filter_unit->right();
     unique_ptr<Expression> left;
     unique_ptr<Expression> right;
 
-    left = create_expr_from_filter_obj(filter_obj_left);
+    left  = create_expr_from_filter_obj(filter_obj_left);
     right = create_expr_from_filter_obj(filter_obj_right);
 
     ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
     cmp_exprs.emplace_back(cmp_expr);
   }
   if (!cmp_exprs.empty()) {
-    predicate_oper = make_unique<ApplyLogicalOperator>(std::move(cmp_exprs), is_and); // 应该是所有的cmp expr做and，这里貌似只有and，就省去了，传进去的expression都是ComparisonExpr
+    predicate_oper = make_unique<ApplyLogicalOperator>(std::move(cmp_exprs),
+        is_and);  // 应该是所有的cmp expr做and，这里貌似只有and，就省去了，传进去的expression都是ComparisonExpr
   }
 
-  predicate_oper->add_child(std::move(left)); //左儿子是predicate
+  predicate_oper->add_child(std::move(left));  // 左儿子是predicate
 
   return RC::SUCCESS;
 }

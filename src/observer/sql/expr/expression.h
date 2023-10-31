@@ -140,7 +140,8 @@ public:
       : is_uncompleted_(true),
         tmp_relation_name_(attr_node.relation_name),
         tmp_attribute_name_(attr_node.attribute_name),
-        field_alias_(attr_node.alias)
+        field_alias_(attr_node.alias),
+        table_alias_(attr_node.alias)
   {}
   virtual ~FieldExpr() = default;
 
@@ -151,7 +152,12 @@ public:
 
   const Field &field() const { return field_; }
   const Field  get_field() const override { return field_; }
-  const char  *table_name() const override { return field_.table_name(); }
+  void         set_field(const Table *table, const FieldMeta *field_meta)
+  {
+    is_uncompleted_ = false;
+    field_          = Field(table, field_meta);
+  }
+  const char *table_name() const override { return field_.table_name(); }
 
   const char *field_name() const override { return field_.field_name(); }
 
@@ -162,6 +168,7 @@ public:
   void                        set_table_alias(const std::string &alias) { table_alias_ = alias; }
   const std::string          &get_tmp_relation_name() const { return tmp_relation_name_; }
   const std::string          &get_tmp_attribute_name() const { return tmp_attribute_name_; }
+  const std::string          &get_tmp_alias() const { return tmp_alias_; }
   std::unique_ptr<Expression> clone() const override { return std::make_unique<FieldExpr>(field_); }
 
 private:
@@ -172,6 +179,7 @@ private:
   bool        is_uncompleted_{false};
   std::string tmp_attribute_name_{""};
   std::string tmp_relation_name_{""};
+  std::string tmp_alias_{""};
 };
 
 /**
@@ -395,13 +403,18 @@ public:
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
 
+  static RC complete_arithmetic_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+      std::unordered_map<std::string, std::string> *tables_alias, ArithmeticExpr *expr);
+  static RC collect_fields_from_arithmetic_expr(
+      ArithmeticExpr *expr, std::vector<Field> &fields, const char *table_name);
+
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
 
 private:
   Type                        arithmetic_type_;
-  std::unique_ptr<Expression> left_;
-  std::unique_ptr<Expression> right_;
+  std::unique_ptr<Expression> left_{nullptr};
+  std::unique_ptr<Expression> right_{nullptr};
 };
 
 class AggregateExpr : public Expression

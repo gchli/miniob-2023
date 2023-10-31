@@ -73,8 +73,11 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
       bool        with_table_name = select_stmt->tables().size() > 1;
 
       for (int i = 0; i < select_stmt->query_exprs().size(); i++) {
-        const shared_ptr<Expression> &expr = select_stmt->query_exprs()[i];
-        const auto field_alias = select_stmt->field_alias()[i];
+        const shared_ptr<Expression> &expr        = select_stmt->query_exprs()[i];
+        string                        field_alias = "";
+        if (select_stmt->field_alias().size() > i) {
+          field_alias = select_stmt->field_alias()[i];
+        }
         if (expr->type() == ExprType::AGGREGATE) {
           if (field_alias != "") {
             schema.append_cell(field_alias.c_str());
@@ -104,6 +107,16 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
               schema.append_cell(field_expr->field_name());
             }
           }
+        }
+        if (expr->type() == ExprType::ARITHMETIC) {
+
+          if (field_alias != "") {
+            schema.append_cell((field_alias.c_str()));
+          } else {
+            auto arith_expr = dynamic_pointer_cast<ArithmeticExpr>(expr);
+            schema.append_cell(expr->name().c_str());
+          }
+          continue;
         }
       }
     } break;

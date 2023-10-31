@@ -228,6 +228,9 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
       project_operator->add_function_expr(dynamic_pointer_cast<FunctionExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
       project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
+    } else if (expr->type() == ExprType::ARITHMETIC) {
+      project_operator->add_projection(expr->name(), dynamic_pointer_cast<ArithmeticExpr>(expr));
+      project_operator->add_arithmetic_expr(dynamic_pointer_cast<ArithmeticExpr>(expr));
     }
   }
   if (child_phy_oper) {
@@ -433,8 +436,9 @@ RC PhysicalPlanGenerator::create_plan(CalcLogicalOperator &logical_oper, std::un
 
 RC PhysicalPlanGenerator::create_plan(ApplyLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
 {
-  RC                    rc        = RC::SUCCESS;
-  ApplyPhysicalOperator *apply_oper = new ApplyPhysicalOperator(std::move(logical_oper.comp_expression()), logical_oper.is_and());
+  RC                     rc = RC::SUCCESS;
+  ApplyPhysicalOperator *apply_oper =
+      new ApplyPhysicalOperator(std::move(logical_oper.comp_expression()), logical_oper.is_and());
   oper.reset(apply_oper);
   for (auto &child_oper : logical_oper.children()) {
     unique_ptr<PhysicalOperator> child_physical_oper;

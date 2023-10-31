@@ -205,14 +205,14 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   }
 
   if (comp_ == EXIST || comp_ == EXIST_NOT) {
-    const auto &values = dynamic_cast<ValuesExpr*>(right_.get())->values();
-    bool exist = !values.empty();
+    const auto &values = dynamic_cast<ValuesExpr *>(right_.get())->values();
+    bool        exist  = !values.empty();
     value.set_boolean(exist ? (comp_ == EXIST) : (comp_ == EXIST_NOT));
     return RC::SUCCESS;
   }
 
   if (left_->type() == ExprType::VALUES || right_->type() == ExprType::VALUES) {
-  // if (dynamic_cast<ValuesExpr*>(left_.get()) != nullptr && dynamic_cast<ValuesExpr*>(right_.get()) != nullptr) {
+    // if (dynamic_cast<ValuesExpr*>(left_.get()) != nullptr && dynamic_cast<ValuesExpr*>(right_.get()) != nullptr) {
     return RC::INVALID_ARGUMENT;
   }
 
@@ -293,6 +293,10 @@ AttrType ArithmeticExpr::value_type() const
 RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value, Value &value) const
 {
   RC rc = RC::SUCCESS;
+  if (left_value.is_null() || right_value.is_null()) {
+    value.set_null();
+    return rc;
+  }
 
   const AttrType target_type = value_type();
 
@@ -326,7 +330,8 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
         if (right_value.get_int() == 0) {
           // NOTE:
           // 设置为整数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为整数最大值。
-          value.set_int(numeric_limits<int>::max());
+          // value.set_int(numeric_limits<int>::max());
+          value.set_null();
         } else {
           value.set_int(left_value.get_int() / right_value.get_int());
         }
@@ -334,7 +339,8 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
         if (right_value.get_float() > -EPSILON && right_value.get_float() < EPSILON) {
           // NOTE:
           // 设置为浮点数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为浮点数最大值。
-          value.set_float(numeric_limits<float>::max());
+          // value.set_float(numeric_limits<float>::max());
+          value.set_null();
         } else {
           value.set_float(left_value.get_float() / right_value.get_float());
         }
@@ -369,11 +375,14 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
+  if (right_ != nullptr) {
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
   }
+
   return calc_value(left_value, right_value, value);
 }
 
@@ -705,5 +714,127 @@ RC FunctionExpr::create_func_expr(Db *db, const RelAttrSqlNode &attr_node, Table
     func_expr = make_shared<FunctionExpr>(func_type, obj_expr, alias);
   }
 
+  return RC::SUCCESS;
+}
+
+RC ArithmeticExpr::complete_arithmetic_expr(Db *db, Table *default_table,
+    std::unordered_map<std::string, Table *> *tables, std::unordered_map<std::string, std::string> *tables_alias,
+    ArithmeticExpr *expr)
+{
+  auto &left_expr  = expr->left();
+  auto &right_expr = expr->right();
+  if (left_expr != nullptr && left_expr->type() == ExprType::ARITHMETIC) {
+    auto left_arith_expr = dynamic_cast<ArithmeticExpr *>(left_expr.get());
+    RC   rc              = complete_arithmetic_expr(db, default_table, tables, tables_alias, left_arith_expr);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+  if (right_expr != nullptr && right_expr->type() == ExprType::ARITHMETIC) {
+    auto right_arith_expr = dynamic_cast<ArithmeticExpr *>(right_expr.get());
+    RC   rc               = complete_arithmetic_expr(db, default_table, tables, tables_alias, right_arith_expr);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  auto complete_field_expr = [&](FieldExpr *field_expr) {
+    auto            &relation_name  = field_expr->get_tmp_relation_name();
+    auto            &attribute_name = field_expr->get_tmp_attribute_name();
+    Table           *table          = nullptr;
+    const FieldMeta *field_meta     = nullptr;
+    if (relation_name != "") {
+      auto iter = tables->find(relation_name);
+      if (iter == tables->end()) {
+        if (tables_alias->find(relation_name) == tables_alias->end()) {
+          LOG_WARN("no such table in from list: %s", relation_name.c_str());
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        auto table_real_name = tables_alias->at(relation_name);
+        if (tables->find(table_real_name) == tables->end()) {
+          LOG_WARN("no such table in from list: %s", relation_name.c_str());
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        iter = tables->find(table_real_name);
+      }
+      table = iter->second;
+
+    } else {
+      if (tables->size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", attribute_name.c_str());
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      table = default_table;
+    }
+    field_meta = table->table_meta().field(attribute_name.c_str());
+    if (table == nullptr || nullptr == field_meta) {
+      if ((0 == strcmp(attribute_name.c_str(), "*"))) {
+        LOG_WARN("attr name can't be star in expr.");
+        return RC::SCHEMA_FIELD_MISSING;
+      } else {
+        LOG_WARN("no such field.");
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+    }
+    field_expr->set_field(table, field_meta);
+    return RC::SUCCESS;
+  };
+
+  if (left_expr != nullptr && left_expr->type() == ExprType::FIELD) {
+    auto left_field_expr = dynamic_cast<FieldExpr *>(left_expr.get());
+    RC   rc              = complete_field_expr(left_field_expr);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("complete left field expr for arithmetic expr failed.");
+      return rc;
+    }
+  }
+
+  if (right_expr != nullptr && right_expr->type() == ExprType::FIELD) {
+    auto right_field_expr = dynamic_cast<FieldExpr *>(right_expr.get());
+    RC   rc               = complete_field_expr(right_field_expr);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("complete right field expr for arithmetic expr failed.");
+      return rc;
+    }
+  }
+
+  return RC::SUCCESS;
+}
+
+RC ArithmeticExpr::collect_fields_from_arithmetic_expr(
+    ArithmeticExpr *expr, std::vector<Field> &fields, const char *table_name)
+{
+  if (expr == nullptr) {
+    return RC::SUCCESS;
+  }
+  if (expr->left() != nullptr && expr->left()->type() == ExprType::ARITHMETIC) {
+    auto left_arith_expr = dynamic_cast<ArithmeticExpr *>(expr->left().get());
+    RC   rc              = collect_fields_from_arithmetic_expr(left_arith_expr, fields, table_name);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  if (expr->right() != nullptr && expr->right()->type() == ExprType::ARITHMETIC) {
+    auto right_arith_expr = dynamic_cast<ArithmeticExpr *>(expr->right().get());
+    RC   rc               = collect_fields_from_arithmetic_expr(right_arith_expr, fields, table_name);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  if (expr->left() != nullptr && expr->left()->type() == ExprType::FIELD) {
+    auto left_field_expr = dynamic_cast<FieldExpr *>(expr->left().get());
+    if (0 == strcmp(table_name, left_field_expr->table_name())) {
+      fields.emplace_back(left_field_expr->field());
+    }
+  }
+
+  if (expr->right() != nullptr && expr->right()->type() == ExprType::FIELD) {
+    auto right_field_expr = dynamic_cast<FieldExpr *>(expr->right().get());
+    if (0 == strcmp(table_name, right_field_expr->table_name())) {
+      fields.emplace_back(right_field_expr->field());
+    }
+  }
   return RC::SUCCESS;
 }

@@ -196,6 +196,9 @@ bool FilterStmt::check_comparable(FilterUnit &filter_unit)
         return CHARS;
       }
     }
+    if (expr->type() == ExprType::ARITHMETIC) {
+      return expr->value_type();
+    }
 
     return obj.field.attr_type();
   };
@@ -312,7 +315,17 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     } else if (condition.left_attr.is_expr) {
       // expr
       auto left_expr = condition.left_attr.expr;
-      if (left_expr->type() == ExprType::FIELD) {
+      if (left_expr->type() == ExprType::ARITHMETIC) {
+        auto left_arithmetic_expr = dynamic_cast<ArithmeticExpr *>(left_expr);
+        RC rc = ArithmeticExpr::complete_arithmetic_expr(db, default_table, tables, tables_alias, left_arithmetic_expr);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to complete arithmetic expr.");
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<ArithmeticExpr>(left_arithmetic_expr));
+        filter_unit->set_left(filter_obj);
+      } else if (left_expr->type() == ExprType::FIELD) {
         Table           *table           = nullptr;
         const FieldMeta *field           = nullptr;
         bool             from_ctx        = false;
@@ -345,7 +358,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         }
         filter_obj.init_value(left_value_expr->get_value());
         filter_unit->set_left(filter_obj);
-      } else if (left_expr->type() == ExprType::ARITHMETIC) {
       }
     } else {
       // aggr or attr
@@ -436,7 +448,18 @@ right:
     } else if (condition.right_attr.is_expr) {
       // expr
       auto right_expr = condition.right_attr.expr;
-      if (right_expr->type() == ExprType::FIELD) {
+      if (right_expr->type() == ExprType::ARITHMETIC) {
+        auto right_arithmetic_expr = dynamic_cast<ArithmeticExpr *>(right_expr);
+        RC   rc =
+            ArithmeticExpr::complete_arithmetic_expr(db, default_table, tables, tables_alias, right_arithmetic_expr);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to complete arithmetic expr.");
+          return rc;
+        }
+        FilterObj filter_obj;
+        filter_obj.init_expr(shared_ptr<ArithmeticExpr>(right_arithmetic_expr));
+        filter_unit->set_right(filter_obj);
+      } else if (right_expr->type() == ExprType::FIELD) {
         Table           *table            = nullptr;
         const FieldMeta *field            = nullptr;
         bool             from_ctx         = false;
@@ -463,7 +486,6 @@ right:
         auto      right_value_expr = dynamic_cast<ValueExpr *>(right_expr);
         filter_obj.init_value(right_value_expr->get_value());
         filter_unit->set_right(filter_obj);
-      } else if (right_expr->type() == ExprType::ARITHMETIC) {
       }
     } else {
       Table           *table    = nullptr;

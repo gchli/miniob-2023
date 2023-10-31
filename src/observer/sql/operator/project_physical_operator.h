@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "sql/operator/physical_operator.h"
+#include "sql/parser/parse_defs.h"
 #include <memory>
 #include <vector>
 
@@ -31,10 +32,11 @@ public:
   virtual ~ProjectPhysicalOperator() = default;
 
   void                 add_expressions(std::vector<std::unique_ptr<Expression>> &&expressions) {}
-  void                 add_projection(const Table *table, const FieldMeta *field, const std::string alias="");
+  void                 add_projection(const Table *table, const FieldMeta *field, const std::string alias = "");
   void                 add_projection(const std::string &alias);
   void                 add_projection(const std::string &alias, shared_ptr<Expression> expr);
   void                 add_function_expr(const shared_ptr<FunctionExpr> &func_expr);
+  void                 add_arithmetic_expr(const shared_ptr<ArithmeticExpr> &arithmetic_expr);
   PhysicalOperatorType type() const override { return PhysicalOperatorType::PROJECT; }
 
   RC open(Trx *trx) override;
@@ -46,7 +48,8 @@ public:
   Tuple *current_tuple() override;
 
 private:
-  ProjectTuple                     tuple_;
-  vector<shared_ptr<FunctionExpr>> function_exprs;
-  bool                             is_ended_{false};
+  ProjectTuple                       tuple_;
+  vector<shared_ptr<FunctionExpr>>   function_exprs_;
+  vector<shared_ptr<ArithmeticExpr>> arithmetic_exprs_;
+  bool                               is_ended_{false};
 };
