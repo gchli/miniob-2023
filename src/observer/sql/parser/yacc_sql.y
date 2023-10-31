@@ -524,8 +524,6 @@ normal_func:
 
       $$->second_func_arg.is_valid = false;
 
-      // $$->alias = $5;
-
       free($3);
     }
     |
@@ -544,7 +542,6 @@ normal_func:
       $$->second_func_arg.is_valid = true;
       $$->second_func_arg.is_attr = false;
       $$->second_func_arg.value = *$5;
-      // $$->alias = $7;
 
       free($3);
       free($5);
@@ -562,9 +559,6 @@ normal_func:
       $$->first_func_arg.value = *$3;
 
       $$->second_func_arg.is_valid = false;
-
-      // $$->alias = $5;
-
       free($3);
 
     }
@@ -583,7 +577,6 @@ normal_func:
       $$->second_func_arg.is_valid = true;
       $$->second_func_arg.is_attr = false;
       $$->second_func_arg.value = *$5;
-      // $$->alias = $7;
 
       free($3);
       free($5);
@@ -605,9 +598,7 @@ aggr_func:
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->attribute_name = $3;
-      // $$->alias = $5;
       free($3);
-      // free($5);
     }
     | aggr_type LBRACE ID DOT ID RBRACE {
       $$ = new RelAttrSqlNode;
@@ -615,18 +606,16 @@ aggr_func:
       $$->aggr_type = $1;
       $$->relation_name  = $3;
       $$->attribute_name = $5;
-      // $$->alias = $7;
       free($3);
       free($5);
-      // free($7);
+
 		}
 		| aggr_type LBRACE '*' RBRACE {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->attribute_name = "*";
-      // $$->alias = $5;
-      // free($5);
+
 		}
     ;
 
@@ -1267,67 +1256,6 @@ cond_value_list:
     ;
 
 condition:
-    /* normal_func comp_op expr_attr
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | expr_attr comp_op normal_func
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | normal_func comp_op normal_func
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | expr_attr comp_op aggr_func // value should be replaced by expression
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | aggr_func comp_op expr_attr
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
-    }
-    | */
     expr_attr comp_op expr_attr {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -1340,11 +1268,8 @@ condition:
       delete $3;
     }
     | expr_attr comp_op LBRACE select_body RBRACE
-    /* | value comp_op LBRACE select_body RBRACE */
     {
       $$ = new ConditionSqlNode;
-      // $$->left_is_attr = 0;
-      // $$->left_value = *$1;
       $$->left_is_attr = 1;
       $$->left_attr = *$1;
       $$->right_is_select = 1;
@@ -1389,9 +1314,7 @@ condition:
       $$->right_is_select = 1;
       $$->comp = $2;
       $$->values.swap(*$4);
-      // $$->values.emplace_back(*$4);
       std::reverse($$->values.begin(), $$->values.end());
-      // delete $5;
     }
     ;
 
