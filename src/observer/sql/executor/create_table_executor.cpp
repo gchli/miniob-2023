@@ -24,10 +24,11 @@ See the Mulan PSL v2 for more details. */
 
 RC CreateTableExecutor::execute(SQLStageEvent *sql_event)
 {
-  Stmt *stmt = sql_event->stmt();
+  Stmt    *stmt    = sql_event->stmt();
   Session *session = sql_event->session_event()->session();
-  ASSERT(stmt->type() == StmtType::CREATE_TABLE, 
-         "create table executor can not run this command: %d", static_cast<int>(stmt->type()));
+  ASSERT(stmt->type() == StmtType::CREATE_TABLE,
+      "create table executor can not run this command: %d",
+      static_cast<int>(stmt->type()));
 
   CreateTableStmt *create_table_stmt = static_cast<CreateTableStmt *>(stmt);
 
@@ -35,6 +36,30 @@ RC CreateTableExecutor::execute(SQLStageEvent *sql_event)
 
   const char *table_name = create_table_stmt->table_name().c_str();
   RC rc = session->get_current_db()->create_table(table_name, attribute_count, create_table_stmt->attr_infos().data());
+
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("Create table %s failed", table_name);
+    return rc;
+  }
+
+  if (static_cast<CreateTableStmt *>(stmt)->is_create_select()) {
+    const auto &values = static_cast<CreateTableStmt *>(stmt)->get_values();
+    auto        table  = session->get_current_db()->find_table(table_name);
+    for (auto &row : *values) {
+      // table->insert_row(row);
+      Record record;
+      rc = table->make_record(row.size(), row.data(), record);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("make record failed");
+        return rc;
+      }
+      rc = table->insert_record(record);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("insert record failed");
+        return rc;
+      }
+    }
+  }
 
   return rc;
 }

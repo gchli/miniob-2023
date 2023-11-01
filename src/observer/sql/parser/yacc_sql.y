@@ -187,8 +187,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_list>       order_by
 %type <order_by_list>       order_by_list
 %type <rel_attr>            rel_attr
-%type <rel_attr>            rel_attr_with_alias
-%type <rel_attr>            rel_attr_no_alias
+/* %type <rel_attr>            rel_attr_with_alias */
+/* %type <rel_attr>            rel_attr_no_alias */
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
@@ -241,8 +241,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
-%right ID
+
 %left AS DOT
+%right ID
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -419,6 +420,33 @@ create_table_stmt:    /*create table 语句的语法解析树*/
       create_table.attr_infos.emplace_back(*$5);
       std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
       delete $5;
+    }
+    | CREATE TABLE ID AS select_body
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+
+      create_table.select = $5;
+    }
+    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE select_body
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+
+      std::vector<AttrInfoSqlNode> *src_attrs = $6;
+
+      if (src_attrs != nullptr) {
+        create_table.attr_infos.swap(*src_attrs);
+      }
+      create_table.attr_infos.emplace_back(*$5);
+      std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
+      delete $5;
+
+      create_table.select = $8;
     }
     ;
 attr_def_list:
@@ -682,6 +710,7 @@ value_list:
       delete $2;
     }
     ;
+
 all_value:
     minus_value
     {
@@ -968,9 +997,14 @@ alias_optional:
       $$ = strdup($2);
       free($2);
     }
+    | AS SUM {
+      $$ = strdup("sum");
+    }
     ;
 
-rel_attr_with_alias:
+
+
+/* rel_attr_with_alias:
     ID DOT ID ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -1006,9 +1040,9 @@ rel_attr_with_alias:
       $$->alias = $3;
       free($1);
       free($3);
-    }
+    } */
 
-rel_attr_no_alias:
+/* rel_attr_no_alias:
     ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
@@ -1032,15 +1066,50 @@ rel_attr_no_alias:
       $$->alias = "";
       free($1);
     }
-    ;
+    ; */
+
+
 
 rel_attr:
+  /* rel_attr_no_alias alias_optional{
+    $$ = $1;
+    $$->alias = $2;
+    free($2);
+  }; */
+  /* | rel_attr_with_alias {
+    $$ = $1;
+  }; */
+      ID DOT ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias = "";
+      free($1);
+      free($3);
+    }
+    | ID DOT '*' {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->relation_name  = $1;
+      $$->attribute_name = '*';
+      free($1);
+    }
+    | ID {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = false;
+      $$->attribute_name = $1;
+      $$->alias = "";
+      free($1);
+    };
+
+/* rel_attr:
   rel_attr_no_alias {
     $$ = $1;
   }
   | rel_attr_with_alias {
     $$ = $1;
-  };
+  }; */
 
 attr_list:
     /* empty */

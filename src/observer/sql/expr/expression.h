@@ -102,6 +102,7 @@ public:
    * @brief 表达式的名字，比如是字段名称，或者用户在执行SQL语句时输入的内容
    */
   virtual std::string name() const { return name_; }
+  virtual std::string name_create() const { return ""; }
   virtual void        set_name(std::string name) { name_ = name; }
 
   virtual const char                 *table_name() const { return ""; }
@@ -161,8 +162,8 @@ public:
   }
   const char *table_name() const override { return field_.table_name(); }
 
-  const char *field_name() const override { return field_.field_name(); }
-
+  const char                 *field_name() const override { return field_.field_name(); }
+  std::string                 name_create() const override { return field_name(); }
   RC                          get_value(const Tuple &tuple, Value &value) const override;
   const std::string           get_field_alias() const { return field_alias_; }
   void                        set_field_alias(const std::string &alias) { field_alias_ = alias; }
@@ -213,8 +214,8 @@ public:
 
   void get_value(Value &value) const { value = value_; }
 
-  const Value &get_value() const { return value_; }
-
+  const Value                &get_value() const { return value_; }
+  std::string                 name_create() const override { return value_.to_string().c_str(); }
   std::unique_ptr<Expression> clone() const override { return std::make_unique<ValueExpr>(value_); }
   std::string                 name() const override { return value_.to_string(); }
 
@@ -406,7 +407,9 @@ public:
 
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
-
+  std::string                  name_create() const override { return name(); }
+  void                         set_alias(std::string alias) { alias_ = alias; }
+  std::string                 &get_alias() { return alias_; }
   static RC complete_arithmetic_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, ArithmeticExpr *expr);
   static RC collect_fields_from_arithmetic_expr(
@@ -422,6 +425,7 @@ private:
   Type                        arithmetic_type_;
   std::unique_ptr<Expression> left_{nullptr};
   std::unique_ptr<Expression> right_{nullptr};
+  std::string                 alias_;
 };
 
 class AggregateExpr : public Expression
@@ -450,6 +454,7 @@ public:
   ExprType    type() const override { return ExprType::AGGREGATE; }
   std::string name() const override;
   std::string name(bool with_table) const;
+  std::string name_create() const override { return name(false); }
   AttrType    value_type() const override
   {
     if (aggregate_type_ == AVG_T) {
@@ -524,6 +529,7 @@ public:
   ExprType    type() const override { return ExprType::FUNCTION; }
   std::string name() const override;
   std::string name(bool with_table) const;
+  std::string name_create() const override { return name(false); }
   AttrType    value_type() const override
   {
     if (function_type_ == LENGTH_T) {

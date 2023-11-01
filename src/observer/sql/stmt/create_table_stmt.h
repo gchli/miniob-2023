@@ -30,19 +30,28 @@ class CreateTableStmt : public Stmt
 {
 public:
   CreateTableStmt(const std::string &table_name, const std::vector<AttrInfoSqlNode> &attr_infos)
-        : table_name_(table_name),
-          attr_infos_(attr_infos)
+      : table_name_(table_name), attr_infos_(attr_infos)
+  {}
+  CreateTableStmt(const std::string &table_name, const std::vector<AttrInfoSqlNode> &attr_infos,
+      std::shared_ptr<std::vector<std::vector<Value>>> values)
+      : table_name_(table_name), attr_infos_(attr_infos), values_(values), create_select_(true)
   {}
   virtual ~CreateTableStmt() = default;
 
   StmtType type() const override { return StmtType::CREATE_TABLE; }
 
-  const std::string &table_name() const { return table_name_; }
+  const std::string                  &table_name() const { return table_name_; }
   const std::vector<AttrInfoSqlNode> &attr_infos() const { return attr_infos_; }
 
-  static RC create(Db *db, const CreateTableSqlNode &create_table, Stmt *&stmt);
+  static RC                                         create(Db *db, const CreateTableSqlNode &create_table, Stmt *&stmt);
+  bool                                              is_create_select() { return create_select_; }
+  void                                              set_create_select(bool select) { create_select_ = select; }
+  std::shared_ptr<std::vector<std::vector<Value>>> &get_values() { return values_; };
+  void set_values(std::shared_ptr<std::vector<std::vector<Value>>> values) { values_ = values; }
 
 private:
-  std::string table_name_;
-  std::vector<AttrInfoSqlNode> attr_infos_;
+  std::shared_ptr<std::vector<std::vector<Value>>> values_{nullptr};
+  bool                                             create_select_{false};
+  std::string                                      table_name_;
+  std::vector<AttrInfoSqlNode>                     attr_infos_;
 };
