@@ -165,7 +165,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
-/* %token <date */
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -187,8 +186,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_list>       order_by
 %type <order_by_list>       order_by_list
 %type <rel_attr>            rel_attr
-/* %type <rel_attr>            rel_attr_with_alias */
-/* %type <rel_attr>            rel_attr_no_alias */
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
@@ -1002,84 +999,8 @@ alias_optional:
     }
     ;
 
-
-
-/* rel_attr_with_alias:
-    ID DOT ID ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->relation_name  = $1;
-      $$->attribute_name = $3;
-      $$->alias = $4;
-      free($1);
-      free($3);
-      free($4);
-    }
-    | ID DOT ID AS ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->relation_name  = $1;
-      $$->attribute_name = $3;
-      $$->alias = $5;
-      free($1);
-      free($3);
-      free($5);
-    }
-    | ID ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = $2;
-      free($1);
-      free($2);
-    }
-    | ID AS ID  {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = $3;
-      free($1);
-      free($3);
-    } */
-
-/* rel_attr_no_alias:
-    ID DOT ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->relation_name  = $1;
-      $$->attribute_name = $3;
-      $$->alias = "";
-      free($1);
-      free($3);
-    }
-    | ID DOT '*' {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->relation_name  = $1;
-      $$->attribute_name = '*';
-      free($1);
-    }
-    | ID {
-      $$ = new RelAttrSqlNode;
-      $$->is_aggr = false;
-      $$->attribute_name = $1;
-      $$->alias = "";
-      free($1);
-    }
-    ; */
-
-
-
 rel_attr:
-  /* rel_attr_no_alias alias_optional{
-    $$ = $1;
-    $$->alias = $2;
-    free($2);
-  }; */
-  /* | rel_attr_with_alias {
-    $$ = $1;
-  }; */
-      ID DOT ID {
+    ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->is_aggr = false;
       $$->relation_name  = $1;
@@ -1103,13 +1024,6 @@ rel_attr:
       free($1);
     };
 
-/* rel_attr:
-  rel_attr_no_alias {
-    $$ = $1;
-  }
-  | rel_attr_with_alias {
-    $$ = $1;
-  }; */
 
 attr_list:
     /* empty */
