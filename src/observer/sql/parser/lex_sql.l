@@ -145,6 +145,7 @@ LENGTH                                  RETURN_TOKEN(LENGTH);
 DATE_FORMAT                             RETURN_TOKEN(DATE_FORMAT);
 ROUND                                   RETURN_TOKEN(ROUND);
 AS                                      RETURN_TOKEN(AS);
+VIEW                                    RETURN_TOKEN(VIEW);
 
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);

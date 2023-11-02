@@ -403,6 +403,7 @@ enum SqlCommandFlag
   SCF_EXIT,
   SCF_EXPLAIN,
   SCF_SET_VARIABLE,  ///< 设置变量
+  SCF_CREATE_VIEW
 };
 /**
  * @brief 表示一个SQL语句
@@ -426,6 +427,7 @@ public:
   LoadDataSqlNode     load_data;
   ExplainSqlNode      explain;
   SetVariableSqlNode  set_variable;
+  CreateViewSqlNode   create_view;
 
 public:
   ParsedSqlNode();

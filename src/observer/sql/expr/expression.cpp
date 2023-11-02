@@ -410,7 +410,7 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   return calc_value(left_value, right_value, value);
 }
 
-std::string AggregateExpr::name() const { return name(true); }
+std::string AggregateExpr::name() const { return name(false); }
 
 std::string AggregateExpr::name(bool with_table) const
 {
@@ -640,7 +640,7 @@ RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
 
   return RC::INVALID_ARGUMENT;
 }
-std::string FunctionExpr::name() const { return name(true); }
+std::string FunctionExpr::name() const { return name(false); }
 std::string FunctionExpr::name(bool with_table) const
 {
   if (alias_ != "") {

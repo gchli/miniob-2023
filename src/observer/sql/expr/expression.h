@@ -110,19 +110,10 @@ public:
   virtual const Field                 get_field() const { return {}; }
   virtual std::unique_ptr<Expression> clone() const { return nullptr; }
 
+  virtual const std::string view_name() const { return ""; };
+
 private:
   std::string name_;
-};
-
-class ExprContext
-{
-public:
-  std::unordered_map<std::string, shared_ptr<Tuple>> ctx_;
-  static ExprContext                                &get_context()
-  {
-    static ExprContext ctx;
-    return ctx;
-  }
 };
 
 /**
@@ -176,6 +167,11 @@ public:
   static RC complete_field_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, FieldExpr *expr);
 
+  const std::string view_name() const override  {
+    if (field_alias_ != "") return field_alias_;
+    return field_.field_name();
+  }
+
 private:
   Field       field_;
   std::string field_alias_{""};
@@ -219,8 +215,16 @@ public:
   std::unique_ptr<Expression> clone() const override { return std::make_unique<ValueExpr>(value_); }
   std::string                 name() const override { return value_.to_string(); }
 
+  void set_alias(const std::string &alias) { alias_ = alias; }
+  const std::string get_alias() const { return alias_; }
+
+  const std::string view_name() const override  {
+    if (alias_ != "") return alias_;
+    return value_.to_string();
+  }
 private:
   Value value_;
+  std::string alias_;
 };
 
 class ValuesExpr : public Expression
@@ -486,6 +490,8 @@ public:
   const std::string &get_tmp_alias() const { return tmp_alias_; }
   static RC complete_aggregate_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, AggregateExpr *expr);
+  std::string      get_alais() const { return alais_; }
+  void             set_alais(const char *alais) { this->alais_ = alais; }
 
 private:
   AggrType    aggregate_type_;
@@ -496,6 +502,7 @@ private:
   std::string tmp_relation_name_{""};
   std::string tmp_alias_{""};
   Value       val_;
+  std::string alais_ = "";
 };
 
 class FunctionExpr : public Expression

@@ -123,6 +123,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         DATE_FORMAT
         ROUND
         AS
+        VIEW
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -230,6 +231,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <sql_node>            create_view_stmt
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -271,6 +273,7 @@ command_wrapper:
   | set_variable_stmt
   | help_stmt
   | exit_stmt
+  | create_view_stmt
     ;
 
 exit_stmt:
@@ -326,6 +329,15 @@ desc_table_stmt:
       $$ = new ParsedSqlNode(SCF_DESC_TABLE);
       $$->desc_table.relation_name = $2;
       free($2);
+    }
+    ;
+
+create_view_stmt:
+    CREATE VIEW ID AS select_body {
+      $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+      $$->create_view.view_name = $3;
+      $$->create_view.select = $5;
+      free($3);
     }
     ;
 
