@@ -286,9 +286,11 @@ public:
         }
         return tuple_->find_cell(*spec_, cell);
       }
-      std::string alias = std::string(spec.table_name()) + "." + spec_->alias();
-      if (strcmp(alias.c_str(), spec.alias()) == 0) {
-        return tuple_->find_cell(*spec_, cell);
+      if (string(spec_->alias()) != "" && alias() != "") {
+        std::string alias = std::string(spec.table_name()) + "." + spec_->alias();
+        if (strcmp(alias.c_str(), spec.alias()) == 0) {
+          return tuple_->find_cell(*spec_, cell);
+        }
       }
     }
     return tuple_->find_cell(spec, cell);
