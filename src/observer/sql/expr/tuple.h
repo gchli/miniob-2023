@@ -283,6 +283,9 @@ public:
       for (auto spec_ : speces_) {
         std::string alias = std::string(spec.table_name()) + '.' + spec.field_name();
         if (strcmp(alias.c_str(), spec_->alias()) == 0) {
+          if (spec_->expr() != nullptr) {
+            return spec_->expr()->get_value(*tuple_, cell);
+          }
           return tuple_->find_cell(*spec_, cell);
         }
       }

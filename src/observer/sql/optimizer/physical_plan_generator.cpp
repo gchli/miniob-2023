@@ -230,7 +230,7 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     } else if (expr->type() == ExprType::FIELD) {
       project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
     } else if (expr->type() == ExprType::ARITHMETIC) {
-      auto expr_name = expr->alias() == "" ? expr->name() : expr->alias();
+      auto expr_name = field_alias[i] == "" ? expr->name() : field_alias[i];
       project_operator->add_projection(expr_name, dynamic_pointer_cast<ArithmeticExpr>(expr));
       project_operator->add_arithmetic_expr(dynamic_pointer_cast<ArithmeticExpr>(expr));
     }

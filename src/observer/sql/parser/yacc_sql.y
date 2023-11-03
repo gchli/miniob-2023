@@ -665,7 +665,12 @@ aggr_func:
       $$->is_aggr = true;
       $$->aggr_type = $1;
       $$->attribute_name = "*";
-
+		}
+    | aggr_type LBRACE DATA RBRACE {
+      $$ = new RelAttrSqlNode;
+      $$->is_aggr = true;
+      $$->aggr_type = $1;
+      $$->attribute_name = "data";
 		}
     ;
 
@@ -995,6 +1000,15 @@ select_attr:
       attr.is_expr = true;
       $$->emplace_back(attr);
     }
+    | DATA {
+      $$ = new std::vector<RelAttrSqlNode>;
+      RelAttrSqlNode attr;
+      attr.relation_name  = "";
+      attr.attribute_name = "data";
+      attr.expr = new FieldExpr("data");
+      attr.is_expr = true;
+      $$->emplace_back(attr);
+    }
     | expr_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -1021,6 +1035,9 @@ alias_optional:
     }
     | AS SUM {
       $$ = strdup("sum");
+    }
+    | AS DATA {
+      $$ = strdup("data");
     }
     ;
 
