@@ -172,6 +172,10 @@ public:
     return field_.field_name();
   }
 
+  std::string name() const override {
+    return field_name();
+  }
+
 private:
   Field       field_;
   std::string field_alias_{""};

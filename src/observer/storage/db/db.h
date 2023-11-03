@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <unordered_set>
+#include <utility>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -24,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class CLogManager;
+class Stmt;
 
 /**
  * @brief 一个DB实例负责管理一批表
@@ -48,6 +51,8 @@ public:
   RC create_table(const char *table_name, int attribute_count, const AttrInfoSqlNode *attributes);
   RC drop_table(const char *table_name);
 
+  RC create_view(const char *view_name, std::vector<std::string> fields, Stmt *select_stmt);
+
   Table *find_table(const char *table_name) const;
   Table *find_table(int32_t table_id) const;
 
@@ -58,6 +63,8 @@ public:
   RC sync();
 
   RC recover();
+
+  RC rebuild_view(std::string view_name);
 
   CLogManager *clog_manager();
   void         set_default_table(Table *table) { default_table_ = table; }
@@ -70,6 +77,9 @@ private:
   std::string                              name_;
   std::string                              path_;
   std::unordered_map<std::string, Table *> opened_tables_;
+  // std::unordered_map<std::string, std::unordered_set<std::string>> view_map_;
+  // std::unordered_map<std::string, Stmt*> view_stmt_;
+  std::unordered_map<std::string, std::pair<Stmt*, std::vector<std::string>>> views_; 
   std::unique_ptr<CLogManager>             clog_manager_;
   Table                                   *default_table_{nullptr};
   /// 给每个table都分配一个ID，用来记录日志。这里假设所有的DDL都不会并发操作，所以相关的数据都不上锁

@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <cstddef>
 #include <functional>
+#include "sql/stmt/stmt.h"
 #include "storage/table/table_meta.h"
 
 struct RID;
@@ -96,6 +97,12 @@ public:
 
   RecordFileHandler                                        *record_handler() const { return record_handler_; }
   std::unordered_map<std::size_t, shared_ptr<std::string>> &get_text_hashmap() { return text_hashmap_; }
+  bool is_view() const { return is_view_; }
+  void set_is_view(bool is_view) { is_view_ = is_view; }
+  Stmt *view_select() const { return view_select_;}
+  void set_view_select(Stmt *view_select) {
+    view_select_ = view_select;
+  }
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
@@ -123,4 +130,6 @@ private:
   RecordFileHandler   *record_handler_   = nullptr;  /// 记录操作
   std::vector<Index *> indexes_;
   std::unordered_map<std::size_t, shared_ptr<std::string>> text_hashmap_;
+  bool is_view_{false};
+  Stmt *view_select_{nullptr};
 };

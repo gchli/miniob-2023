@@ -201,7 +201,16 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
           continue;
         }
       }
-      unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, true /*readonly*/));
+      unique_ptr<LogicalOperator> table_get_oper;
+      if (!table->is_view()) {
+        table_get_oper.reset(new TableGetLogicalOperator(table, fields, true /*readonly*/));
+      } else {
+        RC rc = create_plan(static_cast<SelectStmt*>(table->view_select()), table_get_oper);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("create view select failed");
+          return rc;
+        }
+      }
       if (table_oper == nullptr) {
         table_oper = std::move(table_get_oper);
       } else {

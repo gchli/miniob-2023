@@ -55,3 +55,5 @@ private:
   std::string                                      table_name_;
   std::vector<AttrInfoSqlNode>                     attr_infos_;
 };
+
+RC CreateSelectToValues(Stmt *select_stmt, std::shared_ptr<std::vector<std::vector<Value>>> &values);

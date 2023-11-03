@@ -21,11 +21,13 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/os/path.h"
 #include "common/lang/string.h"
+#include "sql/stmt/create_table_stmt.h"
 #include "storage/table/table_meta.h"
 #include "storage/table/table.h"
 #include "storage/common/meta_util.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
+#include "sql/stmt/select_stmt.h"
 
 Db::~Db()
 {
@@ -114,6 +116,41 @@ RC Db::drop_table(const char *table_name) {
   }
   return RC::SCHEMA_TABLE_NOT_EXIST;
 }
+
+RC Db::create_view(const char *view_name, std::vector<std::string> fields, Stmt *stmt) {
+  // views_.emplace(view_name, stmt, fields);
+  // Table table;
+  // table.set_is_view(true);
+  // opened_tables_.emplace(view_name, table);
+  return RC::SUCCESS;
+}
+
+// RC Db::rebuild_view(std::string view_name) {
+//   RC rc = RC::SUCCESS;
+//   Stmt *select_stmt = view_stmt_[view_name];
+//   std::vector<AttrInfoSqlNode> attr_infos;
+//   for (auto &expr : static_cast<SelectStmt *>(select_stmt)->query_exprs()) {
+//     attr_infos.emplace_back(AttrInfoSqlNode{expr->value_type(), expr->name_create(), 4, true});
+//   }
+//   auto values = std::make_shared<std::vector<std::vector<Value>>>();
+//   rc          = CreateSelectToValues(select_stmt, values);
+//   if (rc != RC::SUCCESS) {
+//     LOG_WARN("error collect select values for create");
+//     return rc;
+//   }
+//   Table *table = find_table(view_name.c_str());
+//   RecordFileScanner record_scanner;
+//   rc = table->get_record_scanner(record_scanner, nullptr, false);
+//   if (rc != RC::SUCCESS) {
+//     LOG_WARN("error create scanner");
+//     return rc;
+//   }
+//   while (record_scanner.has_next()) {
+//     Record rec;
+//     record_scanner.next(rec);
+//     table->delete_record(rec);
+//   }
+// }
 
 Table *Db::find_table(const char *table_name) const
 {
