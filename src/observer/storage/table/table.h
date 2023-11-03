@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <functional>
 #include "sql/stmt/stmt.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table_meta.h"
 
 struct RID;
@@ -115,6 +116,7 @@ public:
   void set_table(Table *table) {
     table_ = table;
   }
+  const FieldMeta *field_meta_by_offset(int i);
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }

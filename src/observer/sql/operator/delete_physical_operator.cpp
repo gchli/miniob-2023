@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "common/log/log.h"
+#include "sql/expr/tuple.h"
 #include "sql/operator/delete_physical_operator.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
@@ -44,10 +45,15 @@ RC DeletePhysicalOperator::open(Trx *trx)
       LOG_WARN("failed to get current record: %s", strrc(rc));
       return rc;
     }
-
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record &record = row_tuple->record();
-    records.emplace_back(record);
+    if (!table_->is_view()) {
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      Record &record = row_tuple->record();
+      records.emplace_back(record);
+    } else {
+      RowTuple *row_tuple = static_cast<RowTuple*>(static_cast<ProjectTuple *>(tuple)->get_tuple());
+      Record &record = row_tuple->record();
+      records.emplace_back(record);
+    }
     // rc = trx_->delete_record(table_, record);
     // if (rc != RC::SUCCESS) {
     //   LOG_WARN("failed to delete record: %s", strrc(rc));

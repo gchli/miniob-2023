@@ -308,6 +308,9 @@ public:
     }
     return new_tuple;
   }
+  Tuple *get_tuple() {
+    return tuple_;
+  }
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {

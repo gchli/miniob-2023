@@ -73,6 +73,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
 
   size_t                                 col_cnt = update.update_list.size();
   std::vector<const FieldMeta *>         field_metas;
+  std::vector<int>                       field_offsets;
   std::unordered_map<size_t, Value>      value_map;
   std::unordered_map<size_t, SelectStmt> select_map;
 
@@ -81,7 +82,18 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     const FieldMeta  *field_meta;
     const std::string attribute_name = update_pair.attribute_name;
     Value             value          = update_pair.value;
-    RC                rc             = table->get_field_meta_by_name(field_meta, attribute_name);
+    RC                rc;
+    if (!table->is_view()) {
+      table->get_field_meta_by_name(field_meta, attribute_name);
+    } else {
+      int offset;
+      rc = table->get_field_offset_in_fields(offset, attribute_name);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to get field offset. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      field_meta = table->table()->field_meta_by_offset(table->offsets()[i]);
+    }
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
       return rc;

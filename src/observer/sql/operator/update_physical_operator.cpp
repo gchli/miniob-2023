@@ -1,6 +1,7 @@
 #include "sql/operator/update_physical_operator.h"
 
 #include "common/log/log.h"
+#include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
 #include "sql/parser/value.h"
 #include "storage/field/field_meta.h"
@@ -9,6 +10,7 @@
 #include "storage/trx/trx.h"
 #include "sql/stmt/delete_stmt.h"
 #include <sstream>
+#include <vector>
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {
@@ -86,14 +88,24 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
 
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record &record = row_tuple->record();
-    records.emplace_back(record);
+    if (!table_->is_view()) {
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      Record &record = row_tuple->record();
+      records.emplace_back(record);
+    } else {
+      RowTuple *row_tuple = static_cast<RowTuple*>(static_cast<ProjectTuple *>(tuple)->get_tuple());
+      Record &record = row_tuple->record();
+      records.emplace_back(record);
+    }
     // rc = trx_->delete_record(table_, record);
     // if (rc != RC::SUCCESS) {
     //   LOG_WARN("failed to delete record: %s", strrc(rc));
     //   return rc;
     // }
+  }
+  if (table_->is_view()) {
+    Table *actual_table = table_->table();
+    table_ = actual_table;
   }
 
   return RC::SUCCESS;

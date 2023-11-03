@@ -323,6 +323,10 @@ RC Table::update_record(const Record &old_record, const Record &new_record)
   return rc;
 }
 
+const FieldMeta * Table::field_meta_by_offset(int i) {
+  return table_meta_.field(i - table_meta_.sys_field_num());
+}
+
 RC Table::recover_insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;

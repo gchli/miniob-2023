@@ -81,4 +81,11 @@ select * from create_view_t1;
 id | age | name
 199 | 205 | NULL
 
-delete from create_view_v1 where id=199;
+delete from create_view_v1 where age=199;
+
+select * from create_view_t1;
+id | age | name
+
+insert into create_view_v1 values(199, 205);
+
+update create_view_v1 set age=300 where age=199;
