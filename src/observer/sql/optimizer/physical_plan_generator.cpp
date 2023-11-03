@@ -224,12 +224,14 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
   for (int i = 0; i < project_expr.size(); ++i) {
     const auto &expr = project_expr[i];
     if (expr->type() == ExprType::FUNCTION) {
-      project_operator->add_projection(expr->name(), dynamic_pointer_cast<FunctionExpr>(expr));
+      auto expr_name = expr->alias() == "" ? expr->name() : expr->alias();
+      project_operator->add_projection(expr_name, dynamic_pointer_cast<FunctionExpr>(expr));
       project_operator->add_function_expr(dynamic_pointer_cast<FunctionExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
       project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
     } else if (expr->type() == ExprType::ARITHMETIC) {
-      project_operator->add_projection(expr->name(), dynamic_pointer_cast<ArithmeticExpr>(expr));
+      auto expr_name = expr->alias() == "" ? expr->name() : expr->alias();
+      project_operator->add_projection(expr_name, dynamic_pointer_cast<ArithmeticExpr>(expr));
       project_operator->add_arithmetic_expr(dynamic_pointer_cast<ArithmeticExpr>(expr));
     }
   }

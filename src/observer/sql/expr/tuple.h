@@ -281,6 +281,9 @@ public:
     }
     for (auto spec_ : speces_) {
       if (strcmp(spec.alias(), spec_->alias()) == 0) {
+        if (spec_->expr() != nullptr) {
+          return spec_->expr()->get_value(*tuple_, cell);
+        }
         return tuple_->find_cell(*spec_, cell);
       }
     }

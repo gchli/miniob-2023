@@ -213,7 +213,7 @@ RC AggregatePhysicalOperator::open(Trx *trx)
     for (const auto &expr : query_aggr_exprs) {
       Value val = aggregate_table_.get_result(expr);
       expr->set_value(val);
-      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr(), expr->alias());
       aggr_expr_output->set_value(val);
       aggr_exprs_output_.emplace_back(std::move(aggr_expr_output));
     }
@@ -221,7 +221,8 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       const auto &aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
       Value       val       = aggregate_table_.get_result(aggr_expr);
       aggr_expr->set_value(val);
-      auto aggr_expr_output = make_unique<AggregateExpr>(aggr_expr->aggregate_type(), aggr_expr->get_field_expr());
+      auto aggr_expr_output =
+          make_unique<AggregateExpr>(aggr_expr->aggregate_type(), aggr_expr->get_field_expr(), expr->alias());
       aggr_expr_output->set_value(val);
       aggr_exprs_output_.emplace_back(std::move(aggr_expr_output));
     }
@@ -291,17 +292,17 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       } else {
         val = cur_aggr_table.get_result(expr);
       }
-      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      auto aggr_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr(), expr->alias());
       aggr_expr_output->set_value(val);
       aggr_exprs_output->push_back(std::move(aggr_expr_output));
 
-      auto tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      auto tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr(), expr->alias());
       tmp_expr_output->set_value(val);
       tmp_exprs_output->push_back(std::move(tmp_expr_output));
     }
     for (const auto &expr : having_aggr_exprs) {
       Value val             = cur_aggr_table.get_result(expr);
-      auto  tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr());
+      auto  tmp_expr_output = make_unique<AggregateExpr>(expr->aggregate_type(), expr->get_field_expr(), expr->alias());
       tmp_expr_output->set_value(val);
       tmp_exprs_output->push_back(std::move(tmp_expr_output));
     }

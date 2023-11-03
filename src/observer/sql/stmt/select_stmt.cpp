@@ -208,8 +208,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
 
       if (expr->type() == ExprType::FIELD) {
         auto field_expr = dynamic_cast<FieldExpr *>(expr);
-        // auto rel_alias      = relation_attr.alias;
-        auto alias          = field_expr->get_tmp_alias();
+        auto rel_alias  = relation_attr.alias;
+        // auto alias          = field_expr->get_tmp_alias();
         auto relation_name  = field_expr->get_tmp_relation_name();
         auto attribute_name = field_expr->get_tmp_attribute_name();
         if (common::is_blank(relation_name.c_str()) && 0 == strcmp(attribute_name.c_str(), "*")) {
