@@ -67,7 +67,7 @@ public:
 
   // 通过attribute获得FieldMeta，或许应该移动到tablemeta中
   RC get_field_meta_by_name(FieldMeta const *&field_meta, const std::string &attribute);
-
+  RC get_field_offset_in_fields(int &offset, const std::string &attribute);
   /**
    * @brief 根据给定的字段生成一个记录/行
    * @details 通常是由用户传过来的字段，按照schema信息组装成一个record。
@@ -107,6 +107,14 @@ public:
   void set_is_updatable_view(bool b) {
     is_updatable_view_ = b;
   }
+  const std::vector<int> &offsets() const { return offsets_; }
+  void set_offsets(const std::vector<int> &offsets) {
+    offsets_ = offsets;
+  }
+  Table *table() const { return table_; }
+  void set_table(Table *table) {
+    table_ = table;
+  }
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
@@ -137,4 +145,6 @@ private:
   bool is_view_{false};
   bool is_updatable_view_{false};
   Stmt *view_select_{nullptr};
+  std::vector<int> offsets_;
+  Table *table_{nullptr}; // 如果view只对应一个表，那么这个table就是这个表，否则为nullptr
 };

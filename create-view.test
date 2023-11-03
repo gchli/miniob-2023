@@ -70,3 +70,15 @@ select * from view_join_id where id1=1;
 id1 | id2
 1 | 1
 1 | 2
+
+create table create_view_t1(id int, age int, name char(10));
+
+create view create_view_v1 as select age,id from create_view_t1;
+
+insert into create_view_v1 values(199, 205);
+
+select * from create_view_t1;
+id | age | name
+199 | 205 | NULL
+
+delete from create_view_v1 where id=199;

@@ -13,9 +13,12 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/insert_physical_operator.h"
+#include "sql/parser/value.h"
 #include "sql/stmt/insert_stmt.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
+#include <regex.h>
+#include <vector>
 
 using namespace std;
 
@@ -25,6 +28,27 @@ InsertPhysicalOperator::InsertPhysicalOperator(Table *table, vector<vector<Value
 
 RC InsertPhysicalOperator::open(Trx *trx)
 {
+  std::vector<std::vector<Value>> new_values;
+  if (table_->is_view() && table_->is_updatable_view() && table_->table() != nullptr) {
+      Table *actual_table = table_->table();
+      new_values.resize(insert_values_.size());
+      int field_num = actual_table->table_meta().field_num() - table_->table_meta().sys_field_num();    
+      int insert_count = insert_values_.size();
+      auto offsets = table_->offsets();
+      for (int i = 0; i < insert_count; i++) {
+        new_values[i].resize(field_num);
+        for (int j = 0; j < field_num; j++) {
+          new_values[i][j].set_null();
+        }
+        for (int j = 0; j < insert_values_[i].size(); j++) {
+          new_values[i][offsets[j]] = std::move(insert_values_[i][j]);
+        }
+      }
+
+      insert_values_ = std::move(new_values);
+      table_ = actual_table;
+  }
+
   for (const auto &values : insert_values_) {
     Record record;
     RC rc = table_->make_record(static_cast<int>(values.size()), values.data(), record);

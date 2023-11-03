@@ -32,12 +32,14 @@ class Db;
 class CreateViewStmt : public Stmt
 {
 public:
-  CreateViewStmt(const std::string &view_name, Stmt *select_stmt, std::vector<std::string> fields, std::vector<AttrInfoSqlNode> attributes, bool is_updatable_view)
+  CreateViewStmt(const std::string &view_name, Stmt *select_stmt, std::vector<std::string> fields, std::vector<AttrInfoSqlNode> attributes, bool is_updatable_view, std::vector<int> offsets, Table *table)
         : view_name_(view_name),
           select_stmt_(select_stmt),
           fields_(fields),
           attributes_(attributes),
-          is_updatable_view_(is_updatable_view)
+          is_updatable_view_(is_updatable_view),
+          offsets_(offsets),
+          table_(table)
   {}
   virtual ~CreateViewStmt() = default;
 
@@ -48,7 +50,8 @@ public:
   const std::vector<std::string> &fields() const { return fields_; }
   const std::vector<AttrInfoSqlNode> &attributes() const { return attributes_; }
   bool is_updatable_view() const { return is_updatable_view_; }
-  
+  const std::vector<int> &offsets() const { return offsets_; }
+  Table *table() const { return table_; }
 
   static RC create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt);
 
@@ -58,4 +61,6 @@ private:
   std::vector<std::string> fields_;
   std::vector<AttrInfoSqlNode> attributes_;
   bool is_updatable_view_;
+  std::vector<int> offsets_;
+  Table *table_;
 };

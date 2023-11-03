@@ -29,6 +29,8 @@ RC CreateViewExecutor::execute(SQLStageEvent *sql_event)
   table->set_is_view(true);
   table->set_view_select(create_view_stmt->select_stmt());
   table->set_is_updatable_view(create_view_stmt->is_updatable_view());
+  table->set_offsets(create_view_stmt->offsets());
+  table->set_table(create_view_stmt->table());
   // static_cast<SelectStmt*>(create_view_stmt->select_stmt())->query_exprs()
 
   return RC::SUCCESS;
