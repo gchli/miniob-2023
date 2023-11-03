@@ -92,7 +92,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
         LOG_WARN("failed to get field offset. rc=%d:%s", rc, strrc(rc));
         return rc;
       }
-      field_meta = table->table()->field_meta_by_offset(table->offsets()[i]);
+      field_meta = table->table()->field_meta_by_offset(table->offsets()[offset]);
     }
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
