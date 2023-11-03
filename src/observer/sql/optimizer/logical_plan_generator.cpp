@@ -205,7 +205,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       if (!table->is_view()) {
         table_get_oper.reset(new TableGetLogicalOperator(table, fields, true /*readonly*/));
       } else {
-        RC rc = create_plan(static_cast<SelectStmt*>(table->view_select()), table_get_oper);
+        RC rc = create_plan(static_cast<SelectStmt *>(table->view_select()), table_get_oper);
         if (rc != RC::SUCCESS) {
           LOG_WARN("create view select failed");
           return rc;
@@ -321,10 +321,8 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
     case FilterObj::FilterObjType::FILTER_OBJ_EXPR: {
       if (filter_obj.expression->type() == ExprType::FUNCTION) {
         const auto &func_expr = dynamic_pointer_cast<FunctionExpr>(filter_obj.expression);
-        expr                  = new FunctionExpr(func_expr->function_type(),
-            func_expr->get_first_expr(),
-            func_expr->get_second_expr(),
-            func_expr->get_alias());
+        expr                  = new FunctionExpr(
+            func_expr->function_type(), func_expr->get_first_expr(), func_expr->get_second_expr(), func_expr->alias());
         break;
       }
       if (filter_obj.expression->type() == ExprType::AGGREGATE) {

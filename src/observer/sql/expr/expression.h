@@ -101,10 +101,11 @@ public:
   /**
    * @brief 表达式的名字，比如是字段名称，或者用户在执行SQL语句时输入的内容
    */
-  virtual std::string name() const { return name_; }
-  virtual std::string name_create() const { return ""; }
-  virtual void        set_name(std::string name) { name_ = name; }
-
+  virtual std::string                 name() const { return name_; }
+  virtual std::string                 name_create() const { return ""; }
+  virtual void                        set_name(std::string name) { name_ = name; }
+  virtual std::string                 alias() const { return alias_; }
+  virtual void                        set_alias(std::string alias) { alias_ = alias; }
   virtual const char                 *table_name() const { return ""; }
   virtual const char                 *field_name() const { return ""; }
   virtual const Field                 get_field() const { return {}; }
@@ -114,6 +115,7 @@ public:
 
 private:
   std::string name_;
+  std::string alias_{""};
 };
 
 /**
@@ -124,12 +126,21 @@ class FieldExpr : public Expression
 {
 public:
   FieldExpr() = default;
-  FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field) {}
-  FieldExpr(const Field &field) : field_(field) {}
-  FieldExpr(const string &attr_name) : is_uncompleted_(true), tmp_attribute_name_(attr_name) {}
-  FieldExpr(const string &relation_name, const string &attr_name)
+  FieldExpr(const Table *table, const FieldMeta *field, const std::string &alias = "") : field_(table, field)
+  {
+    set_alias(alias);
+  }
+  FieldExpr(const Field &field, const std::string &alias = "") : field_(field) { set_alias(alias); }
+  FieldExpr(const string &attr_name, const std::string &alias = "")
+      : is_uncompleted_(true), tmp_attribute_name_(attr_name)
+  {
+    set_alias(alias);
+  }
+  FieldExpr(const string &relation_name, const string &attr_name, const std::string &alias = "")
       : is_uncompleted_(true), tmp_relation_name_(relation_name), tmp_attribute_name_(attr_name)
-  {}
+  {
+    set_alias(alias);
+  }
   FieldExpr(const RelAttrSqlNode &attr_node)
       : is_uncompleted_(true),
         tmp_relation_name_(attr_node.relation_name),
@@ -167,14 +178,14 @@ public:
   static RC complete_field_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, FieldExpr *expr);
 
-  const std::string view_name() const override  {
-    if (field_alias_ != "") return field_alias_;
+  const std::string view_name() const override
+  {
+    if (field_alias_ != "")
+      return field_alias_;
     return field_.field_name();
   }
 
-  std::string name() const override {
-    return field_name();
-  }
+  std::string name() const override { return field_name(); }
 
 private:
   Field       field_;
@@ -219,16 +230,15 @@ public:
   std::unique_ptr<Expression> clone() const override { return std::make_unique<ValueExpr>(value_); }
   std::string                 name() const override { return value_.to_string(); }
 
-  void set_alias(const std::string &alias) { alias_ = alias; }
-  const std::string get_alias() const { return alias_; }
-
-  const std::string view_name() const override  {
-    if (alias_ != "") return alias_;
+  const std::string view_name() const override
+  {
+    if (alias() != "")
+      return alias();
     return value_.to_string();
   }
+
 private:
   Value value_;
-  std::string alias_;
 };
 
 class ValuesExpr : public Expression
@@ -416,8 +426,6 @@ public:
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
   std::string                  name_create() const override { return name(); }
-  void                         set_alias(std::string alias) { alias_ = alias; }
-  std::string                 &get_alias() { return alias_; }
   static RC complete_arithmetic_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, ArithmeticExpr *expr);
   static RC collect_fields_from_arithmetic_expr(
@@ -433,7 +441,6 @@ private:
   Type                        arithmetic_type_;
   std::unique_ptr<Expression> left_{nullptr};
   std::unique_ptr<Expression> right_{nullptr};
-  std::string                 alias_;
 };
 
 class AggregateExpr : public Expression
@@ -441,21 +448,25 @@ class AggregateExpr : public Expression
 public:
 public:
   AggregateExpr() = default;
-  AggregateExpr(AggrType type, FieldExpr field) : aggregate_type_(type), field_(field)
+  AggregateExpr(AggrType type, FieldExpr field, std::string alias = "") : aggregate_type_(type), field_(field)
   {  // todo set alias and name;
+    set_alias(alias);
     val_.set_null();
   }
-  AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta)
+  AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta, std::string alias = "")
       : aggregate_type_(type), field_(table, field_meta)
-  {}
+  {
+    set_alias(alias);
+  }
   AggregateExpr(const RelAttrSqlNode &attr_node)
       : is_uncompleted_(true),
         aggregate_type_(attr_node.aggr_type),
         tmp_relation_name_(attr_node.relation_name),
         tmp_attribute_name_(attr_node.attribute_name),
-        tmp_alias_(attr_node.alias),
-        alias_(attr_node.alias)
-  {}
+        tmp_alias_(attr_node.alias)
+  {
+    set_alias(attr_node.alias);
+  }
   AggregateExpr(const AggregateExpr &other) = default;
   virtual ~AggregateExpr()                  = default;  // todo(ligch)
 
@@ -483,9 +494,7 @@ public:
   const FieldExpr &get_field_expr() const { return field_; }
   const Field      get_field() const override { return field_.field(); }
   void             set_field(const Field &field) { field_ = FieldExpr(field); }
-  void        set_field_expr(const Table *table, const FieldMeta *field_meta) { field_ = FieldExpr(table, field_meta); }
-  std::string get_alis() const { return alias_; }
-  void        set_alis(const char *alis) { this->alias_ = alis; }
+  void set_field_expr(const Table *table, const FieldMeta *field_meta) { field_ = FieldExpr(table, field_meta); }
   const Field       &field() { return field_.field(); }
   const char        *table_name() const override { return field_.table_name(); }
   const char        *field_name() const override { return field_.field_name(); }
@@ -494,19 +503,15 @@ public:
   const std::string &get_tmp_alias() const { return tmp_alias_; }
   static RC complete_aggregate_expr(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, AggregateExpr *expr);
-  std::string      get_alais() const { return alais_; }
-  void             set_alais(const char *alais) { this->alais_ = alais; }
 
 private:
   AggrType    aggregate_type_;
   FieldExpr   field_;
-  std::string alias_;
   bool        is_uncompleted_{false};
   std::string tmp_attribute_name_{""};
   std::string tmp_relation_name_{""};
   std::string tmp_alias_{""};
   Value       val_;
-  std::string alais_ = "";
 };
 
 class FunctionExpr : public Expression
@@ -514,9 +519,9 @@ class FunctionExpr : public Expression
 
 public:
   // FunctionExpr(FuncType type, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
-  FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, std::string alias = "");
+  FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, const std::string &alias = "");
   FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr,
-      const std::shared_ptr<Expression> &second_obj_expr, std::string alias = "");
+      const std::shared_ptr<Expression> &second_obj_expr, const std::string &alias = "");
   virtual ~FunctionExpr() = default;  // todo(ligch)
 
   FunctionExpr(const RelAttrSqlNode &attr_node)
@@ -524,9 +529,9 @@ public:
         function_type_(attr_node.func_type),
         tmp_first_func_arg_(attr_node.first_func_arg),
         tmp_second_func_arg_(attr_node.second_func_arg),
-        tmp_alias_(attr_node.alias),
-        alias_(attr_node.alias)
+        tmp_alias_(attr_node.alias)
   {
+    set_alias(attr_node.alias);
     val_.set_null();
   }
 
@@ -582,10 +587,9 @@ public:
     }
     return second_obj_expr_->type();
   }
-  std::string &get_alias() { return alias_; }
-  FuncType     function_type() const { return function_type_; }
-  bool         obj_is_val() const { return first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::VALUE; }
-  void         set_name(std::string name) override { alias_ = name; }
+  FuncType function_type() const { return function_type_; }
+  bool     obj_is_val() const { return first_obj_expr_ != nullptr && first_obj_expr_->type() == ExprType::VALUE; }
+  // void         set_name(std::string name) override { alias_ = name; }
 
   const char *table_name() const override
   {
@@ -618,7 +622,6 @@ private:
 
   shared_ptr<Expression> first_obj_expr_{nullptr};
   shared_ptr<Expression> second_obj_expr_{nullptr};
-  std::string            alias_{""};
 
   bool is_uncompleted_{false};
 

@@ -332,9 +332,11 @@ public:
 
   RC find_cell(const TupleCellSpec &spec, Value &cell) const override
   {
-    string alias = spec.field_name() + string(".") + spec.table_name();
+    // string alias = spec.field_name() + string(".") + spec.table_name();
+
     for (const std::unique_ptr<Expression> &expr : expressions_) {
-      if (0 == strcmp(spec.alias(), expr->name().c_str())) {
+      const auto &expr_name = expr->alias() == "" ? expr->name() : expr->alias();
+      if (0 == strcmp(spec.alias(), expr_name.c_str())) {
         return expr->try_get_value(cell);
       }
     }

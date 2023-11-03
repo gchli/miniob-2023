@@ -29,6 +29,7 @@ public:
   const char                   *table_name() const { return table_name_.c_str(); }
   const char                   *field_name() const { return field_name_.c_str(); }
   const char                   *alias() const { return alias_.c_str(); }
+  void                          set_alias(const string &alias) { alias_ = alias; }
   const shared_ptr<Expression> &expr() const { return expr_; }
   void                          set_expr(const shared_ptr<Expression> &expr) { expr_ = expr; }
 

@@ -163,7 +163,7 @@ RC AggregatePhysicalOperator::open(Trx *trx)
       query_aggr_exprs.push_back(dynamic_pointer_cast<AggregateExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
       shared_ptr<AggregateExpr> converted_field_expr =
-          make_shared<AggregateExpr>(FIELD_T, *dynamic_pointer_cast<FieldExpr>(expr));
+          make_shared<AggregateExpr>(FIELD_T, *dynamic_pointer_cast<FieldExpr>(expr), expr->alias());
       query_aggr_exprs.push_back(converted_field_expr);
     } else if (expr->type() == ExprType::ARITHMETIC) {
       has_arithmetic_expr         = true;

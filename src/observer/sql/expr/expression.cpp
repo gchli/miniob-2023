@@ -539,17 +539,19 @@ RC AggregateExpr::complete_aggregate_expr(Db *db, Table *default_table,
   return RC::SUCCESS;
 }
 
-FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, std::string alias)
-    : function_type_(type), first_obj_expr_(first_obj_expr), alias_(alias)
+FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr, const std::string &alias)
+    : function_type_(type), first_obj_expr_(first_obj_expr)
 {
+  set_alias(alias);
   val_.set_null();
 }
 
 FunctionExpr::FunctionExpr(FuncType type, const std::shared_ptr<Expression> &first_obj_expr,
-    const std::shared_ptr<Expression> &second_obj_expr, std::string alias)
-    : function_type_(type), first_obj_expr_(first_obj_expr), second_obj_expr_(second_obj_expr), alias_(alias)
+    const std::shared_ptr<Expression> &second_obj_expr, const std::string &alias)
+    : function_type_(type), first_obj_expr_(first_obj_expr), second_obj_expr_(second_obj_expr)
 {
   val_.set_null();
+  set_alias(alias);
 }
 
 RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
@@ -643,8 +645,8 @@ RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
 std::string FunctionExpr::name() const { return name(false); }
 std::string FunctionExpr::name(bool with_table) const
 {
-  if (alias_ != "") {
-    return alias_;
+  if (alias() != "") {
+    return alias();
   }
   std::string ret = "";
   switch (function_type_) {

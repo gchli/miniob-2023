@@ -170,8 +170,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           return rc;
         }
         field_alias.emplace_back(relation_attr.alias);
-        query_exprs.emplace_back(
-            make_shared<AggregateExpr>(aggregate_expr->aggregate_type(), aggregate_expr->get_field_expr()));
+        query_exprs.emplace_back(make_shared<AggregateExpr>(
+            aggregate_expr->aggregate_type(), aggregate_expr->get_field_expr(), relation_attr.alias));
         continue;
       }
 
@@ -187,7 +187,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         query_exprs.emplace_back(make_shared<FunctionExpr>(func_expr->function_type(),
             func_expr->get_first_expr(),
             func_expr->get_second_expr(),
-            func_expr->get_alias()));
+            relation_attr.alias));
         continue;
       }
 
@@ -200,6 +200,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
           return rc;
         }
         field_alias.emplace_back(relation_attr.alias);
+        arithmetic_expr->set_alias(relation_attr.alias);
         query_exprs.emplace_back(arithmetic_expr);
         // todo(ligch): collect aggregate expressions from arithmetic expr
         continue;
@@ -248,10 +249,10 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
                 LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), attribute_name.c_str());
                 return RC::SCHEMA_FIELD_MISSING;
               }
-              auto field_expr = make_shared<FieldExpr>(table, field_meta);
+              auto field_expr = make_shared<FieldExpr>(table, field_meta, relation_attr.alias);
               field_expr->set_table_alias(relation_name.c_str());
               field_alias.emplace_back(relation_attr.alias);
-              query_exprs.emplace_back(make_shared<FieldExpr>(table, field_meta));
+              query_exprs.emplace_back(field_expr);
             }
           }
         } else {
@@ -267,7 +268,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), attribute_name.c_str());
             return RC::SCHEMA_FIELD_MISSING;
           }
-          auto field_expr = make_shared<FieldExpr>(table, field_meta);
+          auto field_expr = make_shared<FieldExpr>(table, field_meta, relation_attr.alias);
           field_expr->set_table_alias(table->name());
           query_exprs.emplace_back(field_expr);
           field_alias.emplace_back(relation_attr.alias);
