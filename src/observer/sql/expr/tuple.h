@@ -279,6 +279,11 @@ public:
     if (spec.expr() != nullptr) {
       return spec.expr()->get_value(*tuple_, cell);
     }
+    for (auto spec_ : speces_) {
+      if (strcmp(spec.alias(), spec_->alias()) == 0) {
+        return tuple_->find_cell(*spec_, cell);
+      }
+    }
     return tuple_->find_cell(spec, cell);
   }
   Tuple *copy() const override

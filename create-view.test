@@ -1,0 +1,14 @@
+insert into a values (1),(10);
+insert into b values (2),(3);
+
+create view view_ab_alias as select a.a as i1,b.b as i2 from a,b;
+
+select * from view_ab_alias;
+
+create view view_sum as select a.a + b.b as sum from a,b;
+
+select * from view_sum;
+
+create view view_agg as select sum(a) as sum from a;
+
+select * from view_agg;

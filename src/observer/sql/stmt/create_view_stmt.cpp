@@ -20,6 +20,7 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
 
   std::vector<std::string> fields;
   std::vector<AttrInfoSqlNode> attributes;
+  std::unordered_map<std::string, std::shared_ptr<Expression>> view_field_map;
   const auto &exprs = dynamic_cast<SelectStmt*>(select_stmt)->query_exprs();
   const auto &alias = dynamic_cast<SelectStmt*>(select_stmt)->field_alias();
   for (size_t i = 0; i < exprs.size(); i++) {
@@ -29,6 +30,7 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
       fields.emplace_back(alias[i]);
     }
     attributes.emplace_back(AttrInfoSqlNode{exprs[i]->value_type(), fields.back(), 4, true});
+    view_field_map.emplace(fields.back(), exprs[i]);
   }
 
 
