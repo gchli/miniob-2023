@@ -53,7 +53,7 @@ public:
   const std::vector<int> &offsets() const { return offsets_; }
   Table *table() const { return table_; }
 
-  static RC create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt);
+  static RC create(Db *db, CreateViewSqlNode &create_view, Stmt *&stmt);
 
 private:
   std::string view_name_;

@@ -9,10 +9,19 @@
 #include <unordered_map>
 #include <vector>
 
-RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt)
+RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view, Stmt *&stmt)
 {
   stmt = nullptr;
 
+  // for (auto &attr : create_view.select->attributes) {
+  //   std::string alias;
+  //   if (attr.expr->type() == ExprType::FIELD) {
+  //     alias = create_view.view_name + '.' + attr.expr->name();
+  //   } else {
+  //     alias = create_view.view_name + '.' + attr.alias;
+  //   }
+  //   attr.alias = alias;
+  // }
   // 1. 创建一个SelectStmt
   Stmt *select_stmt = nullptr;
   RC rc = SelectStmt::create(db, *create_view.select, select_stmt);
@@ -54,6 +63,18 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
         return rc;
       }
       offsets.emplace_back(offset);
+    }
+  }
+
+  SelectStmt *select_stmt_ptr = static_cast<SelectStmt*>(select_stmt);
+  auto &field_alias = select_stmt_ptr->field_alias();
+  auto &query_exprs = select_stmt_ptr->query_exprs();
+  int col_cnt = field_alias.size();
+  for (int i = 0; i < col_cnt; i++) {
+    if (field_alias[i] != "") {
+      field_alias[i] = create_view.view_name + '.' + query_exprs[i]->alias();
+    } else {
+      field_alias[i] = create_view.view_name + '.' + query_exprs[i]->name();
     }
   }
 

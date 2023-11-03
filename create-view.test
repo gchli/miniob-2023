@@ -89,3 +89,12 @@ id | age | name
 insert into create_view_v1 values(199, 205);
 
 update create_view_v1 set age=300 where age=199;
+
+create table view_t1 (id int, age int, name char);
+
+insert into view_t1 values (1,18,'a'), (2,15,'a');
+
+create view view_v1 as select * from view_t1;
+
+select * from view_v1;
+
