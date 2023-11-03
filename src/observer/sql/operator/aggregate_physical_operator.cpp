@@ -346,9 +346,11 @@ bool AggregatePhysicalOperator::is_tuple_valid(Tuple &tuple, const shared_ptr<Fi
     if (left_filer_obj.is_expr()) {
       const auto &expr = left_filer_obj.expression;
       if (expr->type() == ExprType::AGGREGATE) {
-        auto          aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
-        TupleCellSpec tuple_spec(aggr_expr->name(true).c_str());
-        tuple.find_cell(tuple_spec, left_value);
+        auto aggr_expr = dynamic_pointer_cast<AggregateExpr>(expr);
+        RC   rc        = aggr_expr->get_value(tuple, left_value);
+        // TupleCellSpec tuple_spec(aggr_expr->name(true).c_str());
+
+        // tuple.find_cell(tuple_spec, left_value);
       } else {
         LOG_WARN("shouldn't have other expr type in having filter obj now");
       }
