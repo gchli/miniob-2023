@@ -84,7 +84,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     Value             value          = update_pair.value;
     RC                rc;
     if (!table->is_view()) {
-      table->get_field_meta_by_name(field_meta, attribute_name);
+      rc = table->get_field_meta_by_name(field_meta, attribute_name);
     } else {
       int offset;
       rc = table->get_field_offset_in_fields(offset, attribute_name);
