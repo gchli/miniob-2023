@@ -43,6 +43,10 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
+  if (table->is_view() && !table->is_updatable_view()) {
+    return RC::NOT_UPDATABLE_VIEW;
+  }
+
 
   for (int i = 0; i < inserts.insert_values.size(); i++) {
     // check the fields number
