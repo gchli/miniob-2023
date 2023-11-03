@@ -55,6 +55,10 @@ RC DeletePhysicalOperator::open(Trx *trx)
     // }
   }
 
+  if (table_->is_view() && table_->is_updatable_view()) {
+    table_ = table_->table();
+  }
+
   return RC::SUCCESS;
 }
 

@@ -480,8 +480,20 @@ RC LogicalPlanGenerator::create_plan(DeleteStmt *delete_stmt, unique_ptr<Logical
     const FieldMeta *field_meta = table->table_meta().field(i);
     fields.push_back(Field(table, field_meta));
   }
-  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, false /*readonly*/));
-
+  unique_ptr<LogicalOperator> table_get_oper;
+  if (table->is_view()) {
+    if (table->is_updatable_view()) {
+      RC rc = create_plan(static_cast<SelectStmt *>(table->view_select()), table_get_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("create view select failed");
+        return rc;
+      }
+    } else {
+      return RC::NOT_UPDATABLE_VIEW;
+    }
+  } else {
+    table_get_oper.reset(new TableGetLogicalOperator(table, fields, false /*readonly*/));
+  }
   unique_ptr<LogicalOperator> predicate_oper;
   RC                          rc = create_plan(filter_stmt, predicate_oper);
   if (rc != RC::SUCCESS) {

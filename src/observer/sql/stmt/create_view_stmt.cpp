@@ -3,6 +3,7 @@
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/select_stmt.h"
+#include "storage/field/field_meta.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -39,9 +40,25 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
     }
   }
 
+  std::vector<int> offsets; // select b, a from table1; b a在原表中的fields下表，方便更新与重建
+  Table *table;
+  if (is_updatable_view) {
+    table = db->find_table(static_cast<SelectStmt*>(select_stmt)->tables()[0]->name());
+    for (size_t i = 0; i < exprs.size(); i++) {
+      auto field_expr = static_cast<FieldExpr*>(exprs[i].get());
+      auto field_name = field_expr->field_name();
+      int offset;
+      rc = table->get_field_offset_in_fields(offset, field_name);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      offsets.emplace_back(offset);
+    }
+  }
 
   // 2. 创建CreateViewStmt
-  stmt = new CreateViewStmt(create_view.view_name, select_stmt, fields, attributes, is_updatable_view);
+  stmt = new CreateViewStmt(create_view.view_name, select_stmt, fields, attributes, is_updatable_view, offsets, table);
   // Stmt *select_stmt;
   // RC    rc = SelectStmt::create(db, *create_view.select, select_stmt);
   // if (rc != RC::SUCCESS) {

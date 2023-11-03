@@ -365,6 +365,18 @@ RC Table::get_field_meta_by_name(FieldMeta const *&field_meta, const std::string
   return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
+RC Table::get_field_offset_in_fields(int &offset, const std::string &attribute) {
+  for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
+    const FieldMeta *field = table_meta_.field(i);
+    if (strcmp(field->name(), attribute.c_str()) == 0) {
+      offset =  i - table_meta_.sys_field_num();
+      return RC::SUCCESS;
+    }
+  }
+
+  return RC::SCHEMA_FIELD_NOT_EXIST;
+}
+
 RC Table::make_update_record(Record &new_record, Record &old_record, const std::vector<const FieldMeta *> &field_metas,
     const std::unordered_map<size_t, Value> &value_map)
 {
