@@ -1,4 +1,5 @@
 #include "sql/stmt/create_view_stmt.h"
+#include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/select_stmt.h"
@@ -17,6 +18,8 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
   if (rc != RC::SUCCESS) {
     return rc;
   }
+  bool is_updatable_view = true;
+  is_updatable_view = static_cast<SelectStmt*>(select_stmt)->tables().size() > 1 ? false : true;
 
   std::vector<std::string> fields;
   std::vector<AttrInfoSqlNode> attributes;
@@ -31,11 +34,14 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
     }
     attributes.emplace_back(AttrInfoSqlNode{exprs[i]->value_type(), fields.back(), 4, true});
     view_field_map.emplace(fields.back(), exprs[i]);
+    if (exprs[i]->type() != ExprType::FIELD) {
+      is_updatable_view = false;
+    }
   }
 
 
   // 2. 创建CreateViewStmt
-  stmt = new CreateViewStmt(create_view.view_name, select_stmt, fields, attributes);
+  stmt = new CreateViewStmt(create_view.view_name, select_stmt, fields, attributes, is_updatable_view);
   // Stmt *select_stmt;
   // RC    rc = SelectStmt::create(db, *create_view.select, select_stmt);
   // if (rc != RC::SUCCESS) {

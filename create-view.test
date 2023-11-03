@@ -1,6 +1,12 @@
 insert into a values (1),(10);
 insert into b values (2),(3);
 
+create view view_a as select * from a;
+
+select * from view_a;
+
+select * from view_a where a <5;
+
 create view view_ab_alias as select a.a as i1,b.b as i2 from a,b;
 
 select * from view_ab_alias;
@@ -12,3 +18,55 @@ select * from view_sum;
 create view view_agg as select sum(a) as sum from a;
 
 select * from view_agg;
+sum
+11
+
+select * from view_agg where sum=11;
+
+
+create table Select_tables_1 (id int, age int, name char);
+create table Select_tables_2 (id int, age int, name char);
+
+insert into Select_tables_1 values (1,18,'a'), (2,15,'a');
+insert into Select_tables_2 values (1,20,'a'), (2,21,'c');
+
+create view table_1_view as select id as col1, age as col2 from Select_tables_1;
+
+select * from table_1_view;
+col1 | col2
+1 | 18
+2 | 15
+
+select * from table_1_view where col1=1;
+col1 | col2
+1 | 18
+
+create view table_1_view_1 as select id as col1, age as col2, name from Select_tables_1
+
+select * from table_1_view_1;
+col1 | col2 | name
+1 | 18 | a
+2 | 15 | a
+
+select * from table_1_view_1 where col2=18;
+col1 | col2 | name
+1 | 18 | a
+
+select * from table_1_view_1 where name='a';
+col1 | col2 | name
+1 | 18 | a
+2 | 15 | a
+
+create view view_join_id as select s1.id as id1, s2.id as id2 from Select_tables_1 s1, Select_tables_2 s2;
+
+select * from view_join_id;
+id1 | id2
+1 | 1
+1 | 2
+2 | 1
+2 | 2
+
+select * from view_join_id where id1=1;
+id1 | id2
+1 | 1
+1 | 2

@@ -103,6 +103,10 @@ public:
   void set_view_select(Stmt *view_select) {
     view_select_ = view_select;
   }
+  bool is_updatable_view() const { return is_updatable_view_; }
+  void set_is_updatable_view(bool b) {
+    is_updatable_view_ = b;
+  }
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
@@ -131,5 +135,6 @@ private:
   std::vector<Index *> indexes_;
   std::unordered_map<std::size_t, shared_ptr<std::string>> text_hashmap_;
   bool is_view_{false};
+  bool is_updatable_view_{false};
   Stmt *view_select_{nullptr};
 };

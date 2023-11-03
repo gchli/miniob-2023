@@ -32,11 +32,12 @@ class Db;
 class CreateViewStmt : public Stmt
 {
 public:
-  CreateViewStmt(const std::string &view_name, Stmt *select_stmt, std::vector<std::string> fields, std::vector<AttrInfoSqlNode> attributes)
+  CreateViewStmt(const std::string &view_name, Stmt *select_stmt, std::vector<std::string> fields, std::vector<AttrInfoSqlNode> attributes, bool is_updatable_view)
         : view_name_(view_name),
           select_stmt_(select_stmt),
           fields_(fields),
-          attributes_(attributes)
+          attributes_(attributes),
+          is_updatable_view_(is_updatable_view)
   {}
   virtual ~CreateViewStmt() = default;
 
@@ -46,6 +47,7 @@ public:
   Stmt *select_stmt() { return select_stmt_; }
   const std::vector<std::string> &fields() const { return fields_; }
   const std::vector<AttrInfoSqlNode> &attributes() const { return attributes_; }
+  bool is_updatable_view() const { return is_updatable_view_; }
   
 
   static RC create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt);
@@ -55,4 +57,5 @@ private:
   Stmt *select_stmt_;
   std::vector<std::string> fields_;
   std::vector<AttrInfoSqlNode> attributes_;
+  bool is_updatable_view_;
 };

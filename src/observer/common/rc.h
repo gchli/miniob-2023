@@ -76,7 +76,8 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(LOGBUF_FULL)                 \
   DEFINE_RC(NOT_IMPLEMENTED)             \
   DEFINE_RC(NEED_SUB_SELECT)             \
-  DEFINE_RC(NEED_APPLY)
+  DEFINE_RC(NEED_APPLY)                  \
+  DEFINE_RC(NOT_UPDATABLE_VIEW)
 
 enum class RC
 {
