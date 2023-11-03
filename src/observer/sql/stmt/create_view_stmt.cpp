@@ -3,6 +3,7 @@
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/select_stmt.h"
+#include "storage/field/field.h"
 #include "storage/field/field_meta.h"
 #include <memory>
 #include <string>
@@ -36,8 +37,11 @@ RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view, Stmt *&stmt)
   std::unordered_map<std::string, std::shared_ptr<Expression>> view_field_map;
   const auto &exprs = dynamic_cast<SelectStmt*>(select_stmt)->query_exprs();
   const auto &alias = dynamic_cast<SelectStmt*>(select_stmt)->field_alias();
+  bool use_attr = create_view.attributes.size() > 0;
   for (size_t i = 0; i < exprs.size(); i++) {
-    if (alias[i] == "") {
+    if (use_attr) {
+      fields.emplace_back(create_view.attributes[i]);
+    } else if (alias[i] == "") {
       fields.emplace_back(exprs[i]->name());
     } else {
       fields.emplace_back(alias[i]);
@@ -71,11 +75,7 @@ RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view, Stmt *&stmt)
   auto &query_exprs = select_stmt_ptr->query_exprs();
   int col_cnt = field_alias.size();
   for (int i = 0; i < col_cnt; i++) {
-    if (field_alias[i] != "") {
-      field_alias[i] = create_view.view_name + '.' + query_exprs[i]->alias();
-    } else {
-      field_alias[i] = create_view.view_name + '.' + query_exprs[i]->name();
-    }
+      field_alias[i] = create_view.view_name + '.' + fields[i];
   }
 
   // 2. 创建CreateViewStmt

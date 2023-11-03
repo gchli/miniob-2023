@@ -281,6 +281,7 @@ struct CreateViewSqlNode
 {
   std::string    view_name;
   SelectSqlNode *select;
+  std::vector<std::string> attributes;
 };
 
 /**

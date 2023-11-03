@@ -339,6 +339,19 @@ create_view_stmt:
       $$->create_view.select = $5;
       free($3);
     }
+    | CREATE VIEW ID LBRACE ID id_list RBRACE AS select_body {
+      $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+      $$->create_view.view_name = $3;
+      $$->create_view.select = $9;
+      if ($6 != nullptr) {
+        $$->create_view.attributes = *$6;
+      } else {
+        $$->create_view.attributes = std::vector<std::string>();
+      }
+      $$->create_view.attributes.emplace_back($5);
+      std::reverse($$->create_view.attributes.begin(), $$->create_view.attributes.end());
+      free($3);
+    }
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
