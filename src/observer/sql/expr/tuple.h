@@ -279,25 +279,15 @@ public:
     if (spec.expr() != nullptr) {
       return spec.expr()->get_value(*tuple_, cell);
     }
-    for (auto spec_ : speces_) {
-      std::string alias = std::string(spec.table_name()) + '.' + spec.field_name();
-      if (strcmp(alias.c_str(), spec_->alias()) == 0) {
-        return tuple_->find_cell(*spec_, cell);
+    if (tuple_->find_cell(spec, cell) != RC::SUCCESS) {
+      for (auto spec_ : speces_) {
+        std::string alias = std::string(spec.table_name()) + '.' + spec.field_name();
+        if (strcmp(alias.c_str(), spec_->alias()) == 0) {
+          return tuple_->find_cell(*spec_, cell);
+        }
       }
-      // if (strcmp(spec.alias(), spec_->alias()) == 0) {
-      //   if (spec_->expr() != nullptr) {
-      //     return spec_->expr()->get_value(*tuple_, cell);
-      //   }
-      //   return tuple_->find_cell(*spec_, cell);
-      // }
-      // if (string(spec_->alias()) != "" && alias() != "") {
-      //   std::string alias = std::string(spec.table_name()) + "." + spec_->alias();
-      //   if (strcmp(alias.c_str(), spec.alias()) == 0) {
-      //     return tuple_->find_cell(*spec_, cell);
-      //   }
-      // }
     }
-    return tuple_->find_cell(spec, cell);
+    return RC::SUCCESS;
   }
   Tuple *copy() const override
   {
