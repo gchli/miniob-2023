@@ -115,3 +115,19 @@ create view create_view_v2(id, age) as select id, age from create_view_t1;
 create view create_view_v5 as select id, age, id+age as data from create_view_t1;
 
 select * from create_view_v5;
+
+select count(*) from create_view_v6;
+- 175
++ 167
+-- below are some requests executed before(partial) --
+-- init data
+create table create_view_t1(id int, age int, name char(10));
+-- init table2
+create table create_view_t2(id int, age int, name char(10));
+-- create view(join)
+create view create_view_v6 as select id, age, id+age as data from create_view_t1 where id in (select id from create_view_t2);
+select count(*) from create_view_v6;
+select count(id) from create_view_v6;
+select sum(data) from create_view_v6;
+select count(name) from create_view_v6;
+...

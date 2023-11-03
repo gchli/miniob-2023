@@ -32,6 +32,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/update_logical_operator.h"
 
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/select_stmt.h"
@@ -363,18 +364,48 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
   return unique_ptr<Expression>(expr);
 }
 
+static RC select_filter_obj_to_values(FilterObj &filter_obj, SelectStmt *select_stmt, CompOp comp) {
+  vector<Value> values;
+  RC rc = SubselctToResult(select_stmt, values, !(comp == EXIST || comp == EXIST_NOT));
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
+    return rc;
+  }
+  if (values.size() == 1 &&
+      !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
+    filter_obj.init_value(values[0]);
+  } else {
+    filter_obj.init_values(std::move(values));
+  }
+  return rc;
+}
+
 RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
   bool                                is_and       = true;
   for (const FilterUnit *filter_unit : filter_units) {
-    const FilterObj       &filter_obj_left  = filter_unit->left();
-    const FilterObj       &filter_obj_right = filter_unit->right();
+    FilterObj       filter_obj_left  = filter_unit->left();
+    FilterObj       filter_obj_right = filter_unit->right();
     unique_ptr<Expression> left;
     unique_ptr<Expression> right;
     if (filter_obj_left.is_select() || filter_obj_right.is_select()) {
       // 如果有个filterobj是select，那么这个filterstmt就需要apply
+      if (filter_obj_left.simple_) {
+        RC rc = select_filter_obj_to_values(filter_obj_left, static_cast<SelectStmt*>(filter_obj_left.select_stmt_.get()), filter_unit->comp());
+        if (rc != RC::SUCCESS) {
+          LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
+          return rc;
+        }
+      }
+      if (filter_obj_right.simple_) {
+        RC rc = select_filter_obj_to_values(filter_obj_right, static_cast<SelectStmt*>(filter_obj_right.select_stmt_.get()), filter_unit->comp());
+        if (rc != RC::SUCCESS) {
+          LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
+          return rc;
+        }
+      }
       return RC::NEED_APPLY;
     }
 

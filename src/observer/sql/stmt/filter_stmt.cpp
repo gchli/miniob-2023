@@ -281,24 +281,26 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         }
       }
       FilterCtx::get_instance().contain_sub_select = true;
-      filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt));
+      filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), false);
       // TODO(liyh): handle complec sub query here
     } else if (rc != RC::SUCCESS) {
       LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
       return rc;
     } else {
-      vector<Value> values;
-      rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
-      if (rc != RC::SUCCESS) {
-        LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
-        return rc;
-      }
-      if (values.size() == 1 &&
-          !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
-        filter_obj.init_value(values[0]);
-      } else {
-        filter_obj.init_values(std::move(values));
-      }
+      // vector<Value> values;
+      // rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
+      // if (rc != RC::SUCCESS) {
+      //   LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
+      //   return rc;
+      // }
+      // if (values.size() == 1 &&
+      //     !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
+      //   filter_obj.init_value(values[0]);
+      // } else {
+      //   filter_obj.init_values(std::move(values));
+      // }
+      FilterCtx::get_instance().contain_sub_select = true;
+      filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), true);
     }
     filter_unit->set_left(filter_obj);
   } else if (condition.left_is_attr) {
@@ -412,19 +414,21 @@ right:
           }
         }
         FilterCtx::get_instance().contain_sub_select = true;
-        filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt));
+        filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), false);
       } else {  // 说明子查询不需要Ctx也能单独跑
-        vector<Value> values;
-        rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
-        if (rc != RC::SUCCESS) {
-          LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
-          return rc;
-        }
-        if (values.size() == 1 && !is_values_op(comp)) {
-          filter_obj.init_value(values[0]);
-        } else {
-          filter_obj.init_values(std::move(values));
-        }
+        // vector<Value> values;
+        // rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
+        // if (rc != RC::SUCCESS) {
+        //   LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
+        //   return rc;
+        // }
+        // if (values.size() == 1 && !is_values_op(comp)) {
+        //   filter_obj.init_value(values[0]);
+        // } else {
+        //   filter_obj.init_values(std::move(values));
+        // }
+        FilterCtx::get_instance().contain_sub_select = true;
+        filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), true);
       }
     } else {
       // select * from x where id in (1,2,3)

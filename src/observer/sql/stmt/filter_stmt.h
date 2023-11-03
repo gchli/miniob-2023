@@ -53,6 +53,7 @@ struct FilterObj
   shared_ptr<Expression> expression;  // maybe normal function or aggregate function  std::vector<Value> values_;
   std::vector<Value>     values_;
   shared_ptr<Stmt>       select_stmt_;
+  bool simple_ = false;
   void                   init_attr(const Field &field)
   {
     type        = FilterObjType::FILTER_OBJ_ATTR;
@@ -83,10 +84,11 @@ struct FilterObj
     values_ = values;
   }
 
-  void init_select_stmt(const shared_ptr<Stmt> &&select_stmt)
+  void init_select_stmt(const shared_ptr<Stmt> &&select_stmt, bool simple=false)
   {
     type         = FilterObjType::FILTER_OBJ_SELECT;
     select_stmt_ = select_stmt;
+    simple_ = simple;
   }
 
   void init_father_attr(const Field &field)
