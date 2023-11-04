@@ -398,23 +398,27 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
     unique_ptr<Expression> right;
     if (filter_obj_left.is_select() || filter_obj_right.is_select()) {
       // 如果有个filterobj是select，那么这个filterstmt就需要apply
+      if (!filter_obj_left.simple_ && !filter_obj_right.simple_) return RC::NEED_APPLY;
       if (filter_obj_left.simple_) {
+        FilterObj new_filter_obj;
         RC rc = select_filter_obj_to_values(
-            filter_obj_left, static_cast<SelectStmt *>(filter_obj_left.select_stmt_.get()), filter_unit->comp());
+            new_filter_obj, static_cast<SelectStmt *>(filter_obj_left.select_stmt_.get()), filter_unit->comp());
         if (rc != RC::SUCCESS) {
           LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
           return rc;
         }
+        filter_obj_left = new_filter_obj;
       }
       if (filter_obj_right.simple_) {
+        FilterObj new_filter_obj;
         RC rc = select_filter_obj_to_values(
-            filter_obj_right, static_cast<SelectStmt *>(filter_obj_right.select_stmt_.get()), filter_unit->comp());
+            new_filter_obj, static_cast<SelectStmt *>(filter_obj_right.select_stmt_.get()), filter_unit->comp());
         if (rc != RC::SUCCESS) {
           LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
           return rc;
         }
+        filter_obj_right = new_filter_obj;
       }
-      return RC::NEED_APPLY;
     }
 
     left  = create_expr_from_filter_obj(filter_obj_left);
