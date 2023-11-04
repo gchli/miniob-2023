@@ -90,6 +90,10 @@ insert into create_view_v1 values(199, 205);
 
 update create_view_v1 set age=300 where age=199;
 
+select * from create_view_t1;
+id | age | name
+205 | 300 | NULL
+
 create table view_t1 (id int, age int, name char);
 
 insert into view_t1 values (1,18,'a'), (2,15,'a');
@@ -108,26 +112,32 @@ insert into create_view_v1 values(165, 165, 'V4XDL');
 insert into create_view_v1 values(138, 138, 'U');
 insert into create_view_v1 values(78, 78, 'V7M3FKW');
 
+create table create_view_t2(id int, age int, name char(10));
+
+insert into create_view_t2 values(78, 20000, 'V7M3FKW');
+
 update create_view_v1 set age=100 where id=165;
 
 create view create_view_v2(id, age) as select id, age from create_view_t1;
 
+select * from create_view_v2;
+id | age
+48 | 48
+74 | 74
+165 | 165
+138 | 138
+78 | 78
+
 create view create_view_v5 as select id, age, id+age as data from create_view_t1;
 
 select * from create_view_v5;
+id | age | data
+48 | 48 | 96
+74 | 74 | 148
+165 | 165 | 330
+138 | 138 | 276
+78 | 78 | 156
 
-select count(*) from create_view_v6;
-- 175
-+ 167
--- below are some requests executed before(partial) --
--- init data
-create table create_view_t1(id int, age int, name char(10));
--- init table2
-create table create_view_t2(id int, age int, name char(10));
--- create view(join)
-create view create_view_v6 as select id, age, id+age as data from create_view_t1 where id in (select id from create_view_t2);
-select count(*) from create_view_v6;
-select count(id) from create_view_v6;
-select sum(data) from create_view_v6;
-select count(name) from create_view_v6;
-...
+create view create_view_v7 as select count(t1.id) as num, sum(t1.age)+sum(t2.age) as data from create_view_t1 t1, create_view_t1 t2 where t1.id=t2.id;
+select count(*) from create_view_v7;
+select sum(num) from create_view_v7;

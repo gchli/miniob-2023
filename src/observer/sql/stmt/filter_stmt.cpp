@@ -260,6 +260,8 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit = new FilterUnit;
   filter_unit->set_is_and(is_and);
 
+  // 不应该让同一层的互相影响，比如说select * from x where (select xxx) = (select id from x where id = 1) 这种不是complex
+  bool contain_sub_select = FilterCtx::get_instance().contain_sub_select;
   if (condition.unary_op) {
     if (condition.comp == EXIST || condition.comp == EXIST_NOT) {
       goto right;
@@ -280,26 +282,13 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
           return rc;
         }
       }
-      FilterCtx::get_instance().contain_sub_select = true;
+      contain_sub_select = true;
       filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), false);
       // TODO(liyh): handle complec sub query here
     } else if (rc != RC::SUCCESS) {
       LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
       return rc;
     } else {
-      // vector<Value> values;
-      // rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
-      // if (rc != RC::SUCCESS) {
-      //   LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
-      //   return rc;
-      // }
-      // if (values.size() == 1 &&
-      //     !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
-      //   filter_obj.init_value(values[0]);
-      // } else {
-      //   filter_obj.init_values(std::move(values));
-      // }
-      FilterCtx::get_instance().contain_sub_select = true;
       filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), true);
     }
     filter_unit->set_left(filter_obj);
@@ -417,21 +406,9 @@ right:
             return rc;
           }
         }
-        FilterCtx::get_instance().contain_sub_select = true;
+        contain_sub_select = true;
         filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), false);
       } else {  // 说明子查询不需要Ctx也能单独跑
-        // vector<Value> values;
-        // rc = SubselctToResult(select_stmt, values, !(condition.comp == EXIST || condition.comp == EXIST_NOT));
-        // if (rc != RC::SUCCESS) {
-        //   LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
-        //   return rc;
-        // }
-        // if (values.size() == 1 && !is_values_op(comp)) {
-        //   filter_obj.init_value(values[0]);
-        // } else {
-        //   filter_obj.init_values(std::move(values));
-        // }
-        FilterCtx::get_instance().contain_sub_select = true;
         filter_obj.init_select_stmt(shared_ptr<Stmt>(select_stmt), true);
       }
     } else {
@@ -535,7 +512,7 @@ right:
     LOG_ERROR("shouldn't has this option.");
     return RC::INVALID_ARGUMENT;
   }
-
+  FilterCtx::get_instance().contain_sub_select |= contain_sub_select;
   filter_unit->set_comp(comp);
 
   // 检查两个类型是否能够比较
