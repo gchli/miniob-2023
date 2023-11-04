@@ -200,7 +200,12 @@ RC AggregatePhysicalOperator::open(Trx *trx)
     if (has_arithmetic_expr) {
       proj_tuple_ = make_shared<ProjectTuple>();
       for (const auto &expr : aggr_exprs_) {
-        TupleCellSpec *spec = new TupleCellSpec(expr->name().c_str());
+        TupleCellSpec *spec = nullptr;
+        if (expr->alias() != "") {
+          spec = new TupleCellSpec(expr->alias().c_str());
+        } else {
+          spec = new TupleCellSpec(expr->name().c_str());
+        }
         spec->set_expr(expr);
         proj_tuple_->add_cell_spec(spec);
       }
