@@ -105,6 +105,8 @@ public:
   const shared_ptr<FilterStmt> get_having_stmt() const { return having_stmt_; }
   void set_having_exprs(std::vector<shared_ptr<Expression>> having_expr) { having_exprs_.swap(having_expr); }
   const std::vector<std::shared_ptr<Expression>> &get_having_exprs() const { return having_exprs_; }
+  void set_field_alias(std::vector<std::string> field_alias) { field_alias_.swap(field_alias); }
+  const std::vector<std::string> &get_field_alias() const { return field_alias_; }
 
 private:
   bool is_tuple_valid(Tuple &tuple, const shared_ptr<FilterStmt> &filter);
@@ -123,4 +125,5 @@ private:
   std::vector<shared_ptr<Expression>>                               having_exprs_;
 
   shared_ptr<ProjectTuple> proj_tuple_{nullptr};  // for expression
+  std::vector<std::string> field_alias_;
 };

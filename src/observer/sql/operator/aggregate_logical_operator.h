@@ -41,6 +41,7 @@ public:
   shared_ptr<FilterStmt> get_having() const { return having_stmt_; }
   void set_having_exprs(std::vector<shared_ptr<Expression>> &having_exprs) { having_exprs_.swap(having_exprs); }
   std::vector<shared_ptr<Expression>> &get_having_exprs() { return having_exprs_; }
+  std::vector<std::string>            &get_field_alias() { return field_alias_; }
   const std::vector<std::string>      &field_alias() const { return field_alias_; }
 
 private:
