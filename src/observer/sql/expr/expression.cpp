@@ -459,6 +459,7 @@ RC AggregateExpr::get_value(const Tuple &tuple, Value &value) const
 {
   if (!val_.is_null()) {
     value = val_;
+    return RC::SUCCESS;
   }
   RC rc = RC::SUCCESS;
   if (aggregate_type_ == FIELD_T) {
@@ -541,7 +542,11 @@ RC AggregateExpr::complete_aggregate_expr(Db *db, Table *default_table,
   if (table == nullptr || field_meta == nullptr) {
     return RC::SCHEMA_FIELD_MISSING;
   }
-  expr->set_field_expr(table, field_meta);
+  if (string(table_name) != "" && table_name != table->name()) {
+    expr->set_field_expr(table, field_meta, table_name);
+  } else {
+    expr->set_field_expr(table, field_meta);
+  }
   return RC::SUCCESS;
 }
 
@@ -953,6 +958,9 @@ RC ArithmeticExpr::complete_arithmetic_expr(Db *db, Table *default_table,
       }
     }
     field_expr->set_field(table, field_meta);
+    if (string(relation_name) != "" && relation_name != table->name()) {
+      field_expr->set_table_alias(relation_name);
+    }
     return RC::SUCCESS;
   };
 
@@ -1092,12 +1100,20 @@ RC ArithmeticExpr::collect_aggregates_from_arithmetic_expr(
 
   if (expr->left() != nullptr && expr->left()->type() == ExprType::AGGREGATE) {
     auto left_aggr_expr = dynamic_cast<AggregateExpr *>(expr->left().get());
-    aggrs.emplace_back(make_shared<AggregateExpr>(left_aggr_expr->aggregate_type(), left_aggr_expr->get_field()));
+    auto new_left_aggr_expr =
+        make_shared<AggregateExpr>(left_aggr_expr->aggregate_type(), left_aggr_expr->get_field_expr());
+    new_left_aggr_expr->set_name(left_aggr_expr->name(true));
+    new_left_aggr_expr->set_alias(left_aggr_expr->alias());
+    aggrs.emplace_back(new_left_aggr_expr);
   }
 
   if (expr->right() != nullptr && expr->right()->type() == ExprType::AGGREGATE) {
     auto right_aggr_expr = dynamic_cast<AggregateExpr *>(expr->right().get());
-    aggrs.emplace_back(make_shared<AggregateExpr>(right_aggr_expr->aggregate_type(), right_aggr_expr->get_field()));
+    auto new_right_aggr_expr =
+        make_shared<AggregateExpr>(right_aggr_expr->aggregate_type(), right_aggr_expr->get_field_expr());
+    new_right_aggr_expr->set_name(right_aggr_expr->name(true));
+    new_right_aggr_expr->set_alias(right_aggr_expr->alias());
+    aggrs.emplace_back(new_right_aggr_expr);
   }
   return RC::SUCCESS;
 }

@@ -148,6 +148,12 @@ public:
         field_alias_(attr_node.alias),
         table_alias_(attr_node.alias)
   {}
+  FieldExpr(const FieldExpr &field_expr)
+  {
+    field_alias_ = field_expr.field_alias_;
+    table_alias_ = field_expr.table_alias_;
+    field_       = field_expr.field_;
+  };
   virtual ~FieldExpr() = default;
 
   ExprType type() const override { return ExprType::FIELD; }
@@ -451,12 +457,15 @@ public:
   AggregateExpr(AggrType type, FieldExpr field, std::string alias = "") : aggregate_type_(type), field_(field)
   {  // todo set alias and name;
     set_alias(alias);
+    field_.set_table_alias(field.get_table_alias());
+    field_.set_field_alias(field.get_field_alias());
     val_.set_null();
   }
   AggregateExpr(AggrType type, const Table *table, const FieldMeta *field_meta, std::string alias = "")
       : aggregate_type_(type), field_(table, field_meta)
   {
     set_alias(alias);
+    val_.set_null();
   }
   AggregateExpr(const RelAttrSqlNode &attr_node)
       : is_uncompleted_(true),
@@ -466,6 +475,7 @@ public:
         tmp_alias_(attr_node.alias)
   {
     set_alias(attr_node.alias);
+    val_.set_null();
   }
   AggregateExpr(const AggregateExpr &other) = default;
   virtual ~AggregateExpr()                  = default;  // todo(ligch)
@@ -494,7 +504,11 @@ public:
   const FieldExpr &get_field_expr() const { return field_; }
   const Field      get_field() const override { return field_.field(); }
   void             set_field(const Field &field) { field_ = FieldExpr(field); }
-  void set_field_expr(const Table *table, const FieldMeta *field_meta) { field_ = FieldExpr(table, field_meta); }
+  void             set_field_expr(const Table *table, const FieldMeta *field_meta, std::string table_alias = "")
+  {
+    field_ = FieldExpr(table, field_meta);
+    field_.set_table_alias(table_alias);
+  }
   const Field       &field() { return field_.field(); }
   const char        *table_name() const override { return field_.table_name(); }
   const char        *field_name() const override { return field_.field_name(); }
