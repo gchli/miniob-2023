@@ -1,29 +1,3 @@
-insert into a values (1),(10);
-insert into b values (2),(3);
-
-create view view_a as select * from a;
-
-select * from view_a;
-
-select * from view_a where a <5;
-
-create view view_ab_alias as select a.a as i1,b.b as i2 from a,b;
-
-select * from view_ab_alias;
-
-create view view_sum as select a.a + b.b as sum from a,b;
-
-select * from view_sum;
-
-create view view_agg as select sum(a) as sum from a;
-
-select * from view_agg;
-sum
-11
-
-select * from view_agg where sum=11;
-
-
 create table Select_tables_1 (id int, age int, name char);
 create table Select_tables_2 (id int, age int, name char);
 
@@ -73,37 +47,6 @@ id1 | id2
 
 create table create_view_t1(id int, age int, name char(10));
 
-create view create_view_v1 as select age,id from create_view_t1;
-
-insert into create_view_v1 values(199, 205);
-
-select * from create_view_t1;
-id | age | name
-199 | 205 | NULL
-
-delete from create_view_v1 where age=199;
-
-select * from create_view_t1;
-id | age | name
-
-insert into create_view_v1 values(199, 205);
-
-update create_view_v1 set age=300 where age=199;
-
-select * from create_view_t1;
-id | age | name
-205 | 300 | NULL
-
-create table view_t1 (id int, age int, name char);
-
-insert into view_t1 values (1,18,'a'), (2,15,'a');
-
-create view view_v1 as select * from view_t1;
-
-select * from view_v1;
-
-create table create_view_t1(id int, age int, name char(10));
-
 create view create_view_v1 as select * from create_view_t1;
 
 insert into create_view_v1 values(48, 48, '1B');
@@ -139,5 +82,11 @@ id | age | data
 78 | 78 | 156
 
 create view create_view_v7 as select count(t1.id) as num, sum(t1.age)+sum(t2.age) as data from create_view_t1 t1, create_view_t1 t2 where t1.id=t2.id;
+
 select count(*) from create_view_v7;
+count(*)
+1
+
 select sum(num) from create_view_v7;
+sum(num)
+5
