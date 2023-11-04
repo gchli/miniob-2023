@@ -168,7 +168,9 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   // }
   //
   if (!has_join) {
+    int i = 0;
     for (Table *table : tables) {
+      std::string        table_alias = select_stmt->table_alias()[i++];
       std::vector<Field> fields;
       for (const auto &expr : all_query_exprs) {
         // todo(ligch): add exprtype::func
@@ -204,7 +206,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       }
       unique_ptr<LogicalOperator> table_get_oper;
       if (!table->is_view()) {
-        table_get_oper.reset(new TableGetLogicalOperator(table, fields, true /*readonly*/));
+        table_get_oper.reset(new TableGetLogicalOperator(table, fields, true /*readonly*/, table_alias));
       } else {
         RC rc = create_plan(static_cast<SelectStmt *>(table->view_select()), table_get_oper);
         if (rc != RC::SUCCESS) {
@@ -308,7 +310,11 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
   Expression *expr;
   switch (filter_obj.type) {
     case FilterObj::FilterObjType::FILTER_OBJ_ATTR: {
-      expr = new FieldExpr(filter_obj.field);
+      auto field_expr = new FieldExpr(filter_obj.field);
+      if (filter_obj.table_alias_ != "") {
+        field_expr->set_table_alias(filter_obj.table_alias_);
+      }
+      expr = field_expr;
     } break;
     case FilterObj::FilterObjType::FILTER_OBJ_VALUE: {
       expr = new ValueExpr(filter_obj.value);
@@ -364,15 +370,15 @@ unique_ptr<Expression> create_expr_from_filter_obj(const FilterObj &filter_obj)
   return unique_ptr<Expression>(expr);
 }
 
-static RC select_filter_obj_to_values(FilterObj &filter_obj, SelectStmt *select_stmt, CompOp comp) {
+static RC select_filter_obj_to_values(FilterObj &filter_obj, SelectStmt *select_stmt, CompOp comp)
+{
   vector<Value> values;
-  RC rc = SubselctToResult(select_stmt, values, !(comp == EXIST || comp == EXIST_NOT));
+  RC            rc = SubselctToResult(select_stmt, values, !(comp == EXIST || comp == EXIST_NOT));
   if (rc != RC::SUCCESS) {
     LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
     return rc;
   }
-  if (values.size() == 1 &&
-      !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
+  if (values.size() == 1 && !is_values_op(comp)) {  // 当子查询只有一个value，并且不是in/exist这样的comp时直接变为value
     filter_obj.init_value(values[0]);
   } else {
     filter_obj.init_values(std::move(values));
@@ -386,21 +392,23 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
   bool                                is_and       = true;
   for (const FilterUnit *filter_unit : filter_units) {
-    FilterObj       filter_obj_left  = filter_unit->left();
-    FilterObj       filter_obj_right = filter_unit->right();
+    FilterObj              filter_obj_left  = filter_unit->left();
+    FilterObj              filter_obj_right = filter_unit->right();
     unique_ptr<Expression> left;
     unique_ptr<Expression> right;
     if (filter_obj_left.is_select() || filter_obj_right.is_select()) {
       // 如果有个filterobj是select，那么这个filterstmt就需要apply
       if (filter_obj_left.simple_) {
-        RC rc = select_filter_obj_to_values(filter_obj_left, static_cast<SelectStmt*>(filter_obj_left.select_stmt_.get()), filter_unit->comp());
+        RC rc = select_filter_obj_to_values(
+            filter_obj_left, static_cast<SelectStmt *>(filter_obj_left.select_stmt_.get()), filter_unit->comp());
         if (rc != RC::SUCCESS) {
           LOG_ERROR("create left sub select failed. %d:%s", rc, strrc(rc));
           return rc;
         }
       }
       if (filter_obj_right.simple_) {
-        RC rc = select_filter_obj_to_values(filter_obj_right, static_cast<SelectStmt*>(filter_obj_right.select_stmt_.get()), filter_unit->comp());
+        RC rc = select_filter_obj_to_values(
+            filter_obj_right, static_cast<SelectStmt *>(filter_obj_right.select_stmt_.get()), filter_unit->comp());
         if (rc != RC::SUCCESS) {
           LOG_ERROR("create right sub select failed. %d:%s", rc, strrc(rc));
           return rc;

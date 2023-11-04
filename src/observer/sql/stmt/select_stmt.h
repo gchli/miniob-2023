@@ -48,7 +48,7 @@ public:
   const std::vector<Table *> &tables() const { return tables_; }
   // const std::vector<Field>                  &query_fields() const { return query_fields_; }
   const std::vector<shared_ptr<Expression>>  &query_exprs() const { return query_exprs_; }
-  std::vector<shared_ptr<Expression>>  &query_exprs() { return query_exprs_; }
+  std::vector<shared_ptr<Expression>>        &query_exprs() { return query_exprs_; }
   const std::vector<shared_ptr<JoinStmt>>    &join_stmts() const { return join_stmts_; }
   const std::vector<shared_ptr<OrderByStmt>> &order_by_stmts() const { return order_by_stmts_; }
   FilterStmt                                 *filter_stmt() const { return filter_stmt_; }
@@ -56,7 +56,8 @@ public:
   std::vector<shared_ptr<Expression>>        &group_by_exprs() { return group_by_exprs_; }
   std::vector<shared_ptr<Expression>>        &having_exprs() { return having_exprs_; }
   const std::vector<std::string>             &field_alias() const { return field_alias_; }
-  std::vector<std::string>             &field_alias() { return field_alias_; }
+  std::vector<std::string>                   &field_alias() { return field_alias_; }
+  std::vector<std::string>                   &table_alias() { return table_alias_; }
 
 private:
   static RC check_table_and_filed_no_star(std::unordered_map<std::string, Table *> &table_map, const char *table_name,
@@ -73,4 +74,5 @@ private:
   std::vector<shared_ptr<Expression>> having_exprs_;
   std::vector<shared_ptr<Expression>> other_func_aggr_field_exprs_;
   std::vector<std::string>            field_alias_;
+  std::vector<std::string>            table_alias_;
 };

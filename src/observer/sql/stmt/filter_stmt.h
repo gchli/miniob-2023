@@ -43,21 +43,28 @@ struct FilterObj
     FILTER_OBJ_FATHRE_ATTR,
   };
   FilterObjType          type;
-  bool is_attr() const { return type == FilterObjType::FILTER_OBJ_ATTR; }
-  bool is_value() const { return type == FilterObjType::FILTER_OBJ_VALUE; }
-  bool is_expr() const { return type == FilterObjType::FILTER_OBJ_EXPR; }
-  bool is_values() const { return type == FilterObjType::FILTER_OBJ_VALUES; }
-  bool is_select() const { return type == FilterObjType::FILTER_OBJ_SELECT; }
+  bool                   is_attr() const { return type == FilterObjType::FILTER_OBJ_ATTR; }
+  bool                   is_value() const { return type == FilterObjType::FILTER_OBJ_VALUE; }
+  bool                   is_expr() const { return type == FilterObjType::FILTER_OBJ_EXPR; }
+  bool                   is_values() const { return type == FilterObjType::FILTER_OBJ_VALUES; }
+  bool                   is_select() const { return type == FilterObjType::FILTER_OBJ_SELECT; }
   Field                  field;
   Value                  value;
   shared_ptr<Expression> expression;  // maybe normal function or aggregate function  std::vector<Value> values_;
   std::vector<Value>     values_;
   shared_ptr<Stmt>       select_stmt_;
-  bool simple_ = false;
-  void                   init_attr(const Field &field)
+  std::string            table_alias_{""};
+  bool                   simple_ = false;
+  // void                   init_attr(const Field &field)
+  // {
+  //   type        = FilterObjType::FILTER_OBJ_ATTR;
+  //   this->field = field;
+  // }
+  void init_attr(const Field &field, std::string table_alias = "")
   {
-    type        = FilterObjType::FILTER_OBJ_ATTR;
-    this->field = field;
+    type               = FilterObjType::FILTER_OBJ_ATTR;
+    this->field        = field;
+    this->table_alias_ = table_alias;
   }
 
   void init_value(const Value &value)
@@ -84,11 +91,11 @@ struct FilterObj
     values_ = values;
   }
 
-  void init_select_stmt(const shared_ptr<Stmt> &&select_stmt, bool simple=false)
+  void init_select_stmt(const shared_ptr<Stmt> &&select_stmt, bool simple = false)
   {
     type         = FilterObjType::FILTER_OBJ_SELECT;
     select_stmt_ = select_stmt;
-    simple_ = simple;
+    simple_      = simple;
   }
 
   void init_father_attr(const Field &field)
@@ -105,10 +112,10 @@ public:
   ~FilterUnit() {}
 
   void set_comp(CompOp comp) { comp_ = comp; }
-  void set_is_and(bool is_and) { is_and_=is_and; }
+  void set_is_and(bool is_and) { is_and_ = is_and; }
 
   CompOp comp() const { return comp_; }
-  bool is_and() const { return is_and_; }
+  bool   is_and() const { return is_and_; }
 
   void set_left(const FilterObj &obj) { left_ = obj; }
   void set_right(const FilterObj &obj) { right_ = obj; }
@@ -117,22 +124,25 @@ public:
   const FilterObj &right() const { return right_; }
 
 private:
-  bool is_and_ = true; // 用来做不同FilterUnit之间的连接
-  CompOp    comp_ = NO_OP;
+  bool      is_and_ = true;  // 用来做不同FilterUnit之间的连接
+  CompOp    comp_   = NO_OP;
   FilterObj left_;
   FilterObj right_;
 };
 
-class FilterCtx {
+class FilterCtx
+{
 public:
   std::unordered_map<std::string, Table *> table_names_;
   std::unordered_map<std::string, Tuple *> tuple_maps_;
-  bool contain_sub_select = false;
-  static FilterCtx &get_instance() {
+  bool                                     contain_sub_select = false;
+  static FilterCtx                        &get_instance()
+  {
     static FilterCtx ctx;
     return ctx;
   }
-  void reset() {
+  void reset()
+  {
     table_names_.clear();
     tuple_maps_.clear();
     contain_sub_select = false;
@@ -155,17 +165,17 @@ public:
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode *conditions, int condition_num,
-      FilterStmt *&stmt, bool find_ctx=false);
+      FilterStmt *&stmt, bool find_ctx = false);
 
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx=false);
+      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, bool find_ctx = false);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx=false);
+      const ConditionSqlNode &condition, FilterUnit *&filter_unit, bool find_ctx = false);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       std::unordered_map<std::string, std::string> *tables_alias, const ConditionSqlNode &condition,
-      FilterUnit *&filter_unit, bool find_ctx=false);
+      FilterUnit *&filter_unit, bool find_ctx = false);
 
 private:
   static bool               check_comparable(FilterUnit &filter_unit);

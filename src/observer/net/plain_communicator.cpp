@@ -243,8 +243,16 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   rc           = RC::SUCCESS;
   Tuple *tuple = nullptr;
-  bool first = true;
+  bool   first = true;
   while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
+    // Value vall;
+    // cout << "write result: " << endl;
+    // for (int i = 0; i < tuple->cell_num(); i++) {
+
+    //   tuple->cell_at(i, vall);
+    //   cout << i << ": " << vall.to_string() << " ";
+    // }
+    // cout << endl;
     if (first) {
       rc = writer_->writen(header.data(), header.size());
       if (OB_FAIL(rc)) {

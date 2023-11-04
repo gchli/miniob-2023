@@ -74,6 +74,22 @@ Tuple *ProjectPhysicalOperator::current_tuple()
   return &tuple_;
 }
 
+void ProjectPhysicalOperator::add_projection(
+    const Table *table, const std::string table_alias, const FieldMeta *field_meta, std::string alias)
+{
+  TupleCellSpec *spec;
+  if (alias == "") {
+    if (table_alias != "") {
+      spec = new TupleCellSpec(table_alias.c_str(), field_meta->name());
+    } else {
+      spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+    }
+  } else {
+    spec = new TupleCellSpec(table->name(), field_meta->name(), alias.c_str());
+  }
+  tuple_.add_cell_spec(spec);
+}
+
 void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, std::string alias)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，

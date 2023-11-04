@@ -73,6 +73,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
 
   // collect tables in `from` statement
   std::vector<Table *>                         tables;
+  std::vector<std::string>                     tables_alias_vec;
   std::unordered_map<std::string, Table *>     table_map;
   std::unordered_map<std::string, std::string> table_alias;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
@@ -99,7 +100,10 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         return RC::INVALID_ARGUMENT;
       }
       table_alias.insert(std::pair<std::string, std::string>(table_name_alias, table_name_str));
+      tables_alias_vec.push_back(table_name_alias);
       FilterCtx::get_instance().table_names_.insert(std::pair<std::string, Table *>(table_name_alias, table));
+    } else {
+      tables_alias_vec.push_back("");
     }
     FilterCtx::get_instance().table_names_.insert(std::pair<std::string, Table *>(table_name, table));
   }
@@ -147,6 +151,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
       }
       auto join_stmt = make_shared<JoinStmt>(join_table, shared_ptr<FilterStmt>(join_filter_stmt));
       join_stmts.push_back(join_stmt);
+      tables_alias_vec.push_back("");
     }
   }
 
@@ -213,18 +218,29 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
         auto relation_name  = field_expr->get_tmp_relation_name();
         auto attribute_name = field_expr->get_tmp_attribute_name();
         if (common::is_blank(relation_name.c_str()) && 0 == strcmp(attribute_name.c_str(), "*")) {
-          for (Table *table : tables) {
-            wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
+          for (int i = 0; i < tables.size(); ++i) {
+            Table *table = tables[i];
+
+            std::string table_alias = tables_alias_vec[i];
+            wildcard_fields(table, query_exprs, table_alias, field_alias);  // todo: fix alias
           }
+          // for (Table *table : tables) {
+          //   wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
+          // }
         } else if (!common::is_blank(relation_name.c_str())) {
           if (0 == strcmp(relation_name.c_str(), "*")) {
             if (0 != strcmp(attribute_name.c_str(), "*")) {
               LOG_WARN("invalid field name while table is *. attr=%s", relation_name.c_str());
               return RC::SCHEMA_FIELD_MISSING;
             }
-            for (Table *table : tables) {
-              wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
+            for (int i = 0; i < tables.size(); ++i) {
+              Table      *table       = tables[i];
+              std::string table_alias = tables_alias_vec[i];
+              wildcard_fields(table, query_exprs, table_alias, field_alias);  // todo: fix alias
             }
+            // for (Table *table : tables) {
+            //   wildcard_fields(table, query_exprs, "", field_alias);  // todo: fix alias
+            // }
           } else {
             auto iter = table_map.find(relation_name);
             if (iter == table_map.end()) {
@@ -457,6 +473,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt, bool
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->having_exprs_.swap(having_exprs);
   select_stmt->field_alias_.swap(field_alias);
+  select_stmt->table_alias_.swap(tables_alias_vec);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

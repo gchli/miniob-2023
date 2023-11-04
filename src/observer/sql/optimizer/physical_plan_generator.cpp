@@ -171,6 +171,9 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
     LOG_TRACE("use index scan");
   } else {
     auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.readonly());
+    if (table_get_oper.table_alias() != "") {
+      table_scan_oper->set_table_alias(table_get_oper.table_alias());
+    }
     table_scan_oper->set_predicates(std::move(predicates));
     oper = unique_ptr<PhysicalOperator>(table_scan_oper);
     LOG_TRACE("use table scan");
@@ -228,7 +231,14 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
       project_operator->add_projection(expr_name, dynamic_pointer_cast<FunctionExpr>(expr));
       project_operator->add_function_expr(dynamic_pointer_cast<FunctionExpr>(expr));
     } else if (expr->type() == ExprType::FIELD) {
-      project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
+      auto converted_field_expr = dynamic_pointer_cast<FieldExpr>(expr);
+      auto table_alias          = converted_field_expr->get_table_alias();
+      if (table_alias != "") {
+        project_operator->add_projection(
+            expr->get_field().table(), table_alias, expr->get_field().meta(), field_alias[i]);
+      } else {
+        project_operator->add_projection(expr->get_field().table(), expr->get_field().meta(), field_alias[i]);
+      }
     } else if (expr->type() == ExprType::ARITHMETIC) {
       auto expr_name = field_alias[i] == "" ? expr->name() : field_alias[i];
       project_operator->add_projection(expr_name, dynamic_pointer_cast<ArithmeticExpr>(expr));

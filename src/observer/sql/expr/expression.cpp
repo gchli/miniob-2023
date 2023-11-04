@@ -32,6 +32,12 @@ using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 {
+  if (table_alias_ != "") {
+    RC rc = tuple.find_cell(TupleCellSpec(table_alias_.c_str(), field_name()), value);
+    if (rc == RC::SUCCESS) {
+      return rc;
+    }
+  }
   return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
 }
 

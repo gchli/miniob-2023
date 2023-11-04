@@ -102,7 +102,11 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
             schema.append_cell(field_alias.c_str());
           } else {
             if (with_table_name) {
-              schema.append_cell(field_expr->table_name(), field_expr->field_name());
+              if (field_expr->get_table_alias() != "") {
+                schema.append_cell(field_expr->get_table_alias().c_str(), field_expr->field_name());
+              } else {
+                schema.append_cell(field_expr->table_name(), field_expr->field_name());
+              }
             } else {
               schema.append_cell(field_expr->field_name());
             }

@@ -357,7 +357,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
           // 当前查询的Attr来自于父查询的表
           filter_obj.init_father_attr(Field(table, field));
         } else {
-          filter_obj.init_attr(Field(table, field));
+          if (table->name() != relation_name) {
+            filter_obj.init_attr(Field(table, field), relation_name);
+          } else {
+            filter_obj.init_attr(Field(table, field));
+          }
         }
 
         filter_unit->set_left(filter_obj);
@@ -494,7 +498,11 @@ right:
         if (from_ctx) {
           filter_obj.init_father_attr(Field(table, field));
         } else {
-          filter_obj.init_attr(Field(table, field));
+          if (table->name() != relation_name) {
+            filter_obj.init_attr(Field(table, field), relation_name);
+          } else {
+            filter_obj.init_attr(Field(table, field));
+          }
         }
         filter_unit->set_right(filter_obj);
       } else if (right_expr->type() == ExprType::VALUE) {

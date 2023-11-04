@@ -171,14 +171,17 @@ public:
   {
     const char *table_name = spec.table_name();
     const char *field_name = spec.field_name();
-    if (0 != strcmp(table_name, table_->name())) {
+    if (0 != strcmp(table_name, table_->name()) && 0 != strcmp(table_name, table_alias_.c_str())) {
       return RC::NOTFOUND;
     }
 
     for (size_t i = 0; i < speces_.size(); ++i) {
       const FieldExpr *field_expr = speces_[i];
       const Field     &field      = field_expr->field();
-      if (0 == strcmp(field_name, field.field_name())) {
+      if (0 == strcmp(field_name, field.field_name()) && 0 == strcmp(table_name, table_->name())) {
+        return cell_at(i, cell);
+      }
+      if (0 == strcmp(field_name, field.field_name()) && 0 == strcmp(table_name, table_alias_.c_str())) {
         return cell_at(i, cell);
       }
     }
@@ -190,6 +193,7 @@ public:
     Record   *new_record = new Record(*record_);
     new_tuple->set_record(new_record);
     new_tuple->set_schema(table_, table_->table_meta().field_metas());
+    new_tuple->set_table_alias(table_alias_);
     return new_tuple;
   }
 #if 0
@@ -209,10 +213,13 @@ public:
   const Record &record() const { return *record_; }
 
   const Table *table() const { return table_; }
+  void         set_table_alias(std::string table_alias) { table_alias_ = table_alias; }
+  std::string  table_alias() const { return table_alias_; }
 
 private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;
+  std::string              table_alias_{""};
   std::vector<FieldExpr *> speces_;
 };
 
@@ -305,9 +312,7 @@ public:
     }
     return new_tuple;
   }
-  Tuple *get_tuple() {
-    return tuple_;
-  }
+  Tuple *get_tuple() { return tuple_; }
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {
@@ -441,7 +446,7 @@ public:
   RC cell_at(int index, Value &value) const override
   {
     const int left_cell_num = left_->cell_num();
-    if (index > 0 && index < left_cell_num) {
+    if (index >= 0 && index < left_cell_num) {
       return left_->cell_at(index, value);
     }
 

@@ -27,18 +27,13 @@ class Table;
 class TableScanPhysicalOperator : public PhysicalOperator
 {
 public:
-  TableScanPhysicalOperator(Table *table, bool readonly) 
-      : table_(table), readonly_(readonly)
-  {}
+  TableScanPhysicalOperator(Table *table, bool readonly) : table_(table), readonly_(readonly) {}
 
   virtual ~TableScanPhysicalOperator() = default;
 
   std::string param() const override;
 
-  PhysicalOperatorType type() const override
-  {
-    return PhysicalOperatorType::TABLE_SCAN;
-  }
+  PhysicalOperatorType type() const override { return PhysicalOperatorType::TABLE_SCAN; }
 
   RC open(Trx *trx) override;
   RC next() override;
@@ -46,17 +41,20 @@ public:
 
   Tuple *current_tuple() override;
 
-  void set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
+  void        set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
+  void        set_table_alias(std::string table_alias) { table_alias_ = table_alias; }
+  std::string table_alias() const { return table_alias_; }
 
 private:
   RC filter(RowTuple &tuple, bool &result);
 
 private:
-  Table *                                  table_ = nullptr;
-  Trx *                                    trx_ = nullptr;
+  Table                                   *table_    = nullptr;
+  Trx                                     *trx_      = nullptr;
   bool                                     readonly_ = false;
   RecordFileScanner                        record_scanner_;
   Record                                   current_record_;
   RowTuple                                 tuple_;
-  std::vector<std::unique_ptr<Expression>> predicates_; // TODO chang predicate to table tuple filter
+  std::vector<std::unique_ptr<Expression>> predicates_;  // TODO chang predicate to table tuple filter
+  std::string                              table_alias_{""};
 };
