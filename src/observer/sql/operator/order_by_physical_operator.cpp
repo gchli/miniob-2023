@@ -59,7 +59,7 @@ RC OrderByPhysicalOperator::open(Trx *trx)
   //   }
   //   return true;
   // });
-  sort(ordered_tuples_.begin(), ordered_tuples_.end(), [&](Tuple *t1, Tuple *t2) {
+  sort(ordered_tuples_.begin(), ordered_tuples_.end(), [&](const Tuple *t1, const Tuple *t2) {
     for (int i = 0; i < order_by_exprs_.size(); ++i) {
       const auto &order_by_expr = order_by_exprs_[i];
       const auto &order_by_type = order_by_type_[i];
