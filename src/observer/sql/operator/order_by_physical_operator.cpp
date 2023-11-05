@@ -59,25 +59,29 @@ RC OrderByPhysicalOperator::open(Trx *trx)
   //   }
   //   return true;
   // });
-  sort(ordered_tuples_.begin(), ordered_tuples_.end(), [&](const Tuple *t1, const Tuple *t2) {
-    for (int i = 0; i < order_by_exprs_.size(); ++i) {
-      const auto &order_by_expr = order_by_exprs_[i];
-      const auto &order_by_type = order_by_type_[i];
-      Value       val1, val2;
-      if (t1 != nullptr) {
-        order_by_expr->get_value(*t1, val1);
-      }
-      if (t2 != nullptr) {
-        order_by_expr->get_value(*t2, val2);
-      }
+  const auto &order_by_exprs_ref = order_by_exprs_;
+  const auto &order_by_type_ref  = order_by_type_;
+  sort(ordered_tuples_.begin(),
+      ordered_tuples_.end(),
+      [&order_by_exprs_ref, &order_by_type_ref](const Tuple *t1, const Tuple *t2) {
+        for (int i = 0; i < order_by_exprs_ref.size(); ++i) {
+          const auto &order_by_expr = order_by_exprs_ref[i];
+          const auto &order_by_type = order_by_type_ref[i];
+          Value       val1, val2;
+          if (t1 != nullptr) {
+            order_by_expr->get_value(*t1, val1);
+          }
+          if (t2 != nullptr) {
+            order_by_expr->get_value(*t2, val2);
+          }
 
-      int comp_result = val1.compare(val2);
-      if (comp_result != 0) {
-        return order_by_type == ASC_T ? comp_result < 0 : comp_result > 0;
-      }
-    }
-    return true;
-  });
+          int comp_result = val1.compare(val2);
+          if (comp_result != 0) {
+            return order_by_type == ASC_T ? comp_result < 0 : comp_result > 0;
+          }
+        }
+        return true;
+      });
   return RC::SUCCESS;
 }
 
