@@ -38,10 +38,11 @@ public:
   }
 
 private:
-  // ProjectTuple                        tuple_;
-  shared_ptr<Tuple>                   tuple_;
+  // shared_ptr<Tuple>                   tuple_;
+  Tuple                              *tuple_;
   std::vector<shared_ptr<Expression>> order_by_exprs_;
   std::vector<OrderType>              order_by_type_;
-  std::vector<shared_ptr<Tuple>>      ordered_tuples_;
-  int                                 cur_index{0};
+  // std::vector<shared_ptr<Tuple>>      ordered_tuples_;
+  std::vector<Tuple *> ordered_tuples_;
+  int                  cur_index{0};
 };
